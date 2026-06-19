@@ -1,0 +1,141 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "CS CampaignSim" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e7]: CS
+      - generic: CampaignSim
+    - button "Expand sidebar" [ref=e8] [cursor=pointer]:
+      - img [ref=e9]
+    - navigation "Main navigation" [ref=e11]:
+      - link "Home" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - generic: Home
+      - link "Simulations" [ref=e15] [cursor=pointer]:
+        - /url: /process
+        - img [ref=e16]
+        - generic: Simulations
+      - link "Graph" [ref=e18] [cursor=pointer]:
+        - /url: /graph
+        - img [ref=e19]
+        - generic: Graph
+      - link "History" [ref=e24] [cursor=pointer]:
+        - /url: /history
+        - img [ref=e25]
+        - generic: History
+    - generic [ref=e29]: Integrations
+    - generic "CRM Integrations — Coming soon":
+      - img
+      - generic: CRM
+      - generic: Soon
+    - generic "User Enrollment — Coming soon":
+      - img
+      - generic: Users
+      - generic: Soon
+    - button "Settings" [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+      - generic [ref=e34]: Settings
+    - generic [ref=e35]:
+      - generic [ref=e36]: A
+      - generic: Account
+  - banner [ref=e37]:
+    - generic [ref=e38]:
+      - heading "Campaign workspace" [level=1] [ref=e39]
+      - generic [ref=e40]: Draft
+    - generic "Project metrics" [ref=e41]:
+      - generic [ref=e42]:
+        - img [ref=e43]
+        - text: 0 personas
+      - generic [ref=e46]:
+        - img [ref=e47]
+        - text: 0 variants
+      - generic [ref=e49]:
+        - img [ref=e50]
+        - text: 0%
+    - generic [ref=e52]:
+      - generic [ref=e53]: Live
+      - button "Switch to dark mode" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+  - main [ref=e61]:
+    - generic [ref=e132]:
+      - generic [ref=e133]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - paragraph [ref=e137]: Step 1 · Brand Intelligence
+            - heading "Upload your campaign brief" [level=1] [ref=e138]
+            - paragraph [ref=e139]: Upload your campaign document and our AI extracts products, target audiences, competitive signals, and marketing channels into a structured map.
+          - button "Back" [ref=e140] [cursor=pointer]:
+            - img [ref=e141]
+            - text: Back
+        - generic [ref=e143] [cursor=pointer]:
+          - button "Drop your campaign brief here or click to browse files PDF TXT up to 10 MB" [ref=e144]
+          - img [ref=e146]
+          - paragraph [ref=e149]: Drop your campaign brief here
+          - paragraph [ref=e150]: or click to browse files
+          - generic [ref=e151]:
+            - generic [ref=e152]: PDF
+            - generic [ref=e153]: TXT
+            - generic [ref=e154]: up to 10 MB
+      - complementary [ref=e155]:
+        - generic [ref=e156]:
+          - paragraph [ref=e157]: What we'll extract from your brief
+          - list [ref=e158]:
+            - listitem [ref=e159]:
+              - img [ref=e161]
+              - generic [ref=e165]:
+                - strong [ref=e166]: Brand Identity
+                - paragraph [ref=e167]: Core brand, values, and positioning signals
+            - listitem [ref=e168]:
+              - img [ref=e170]
+              - generic [ref=e172]:
+                - strong [ref=e173]: Products & Offerings
+                - paragraph [ref=e174]: Products, services, and features mentioned
+            - listitem [ref=e175]:
+              - img [ref=e177]
+              - generic [ref=e182]:
+                - strong [ref=e183]: Audience Segments
+                - paragraph [ref=e184]: Target demographics and customer personas
+            - listitem [ref=e185]:
+              - img [ref=e187]
+              - generic [ref=e189]:
+                - strong [ref=e190]: Marketing Channels
+                - paragraph [ref=e191]: Distribution and media channels
+            - listitem [ref=e192]:
+              - img [ref=e194]
+              - generic [ref=e197]:
+                - strong [ref=e198]: Content Formats
+                - paragraph [ref=e199]: Ad formats, creative types, and media
+        - generic [ref=e200]:
+          - paragraph [ref=e201]: How it works
+          - list [ref=e202]:
+            - listitem [ref=e203]:
+              - generic [ref=e204]: "1"
+              - generic [ref=e205]:
+                - strong [ref=e206]: Upload
+                - paragraph [ref=e207]: Your PDF or text brief is securely processed by our AI.
+            - listitem [ref=e208]:
+              - generic [ref=e209]: "2"
+              - generic [ref=e210]:
+                - strong [ref=e211]: Extract
+                - paragraph [ref=e212]: AI identifies products, audiences, channels, and brand values.
+            - listitem [ref=e213]:
+              - generic [ref=e214]: "3"
+              - generic [ref=e215]:
+                - strong [ref=e216]: Map
+                - paragraph [ref=e217]: Entities are connected into a structured intelligence graph for simulation.
+  - navigation "Workflow steps" [ref=e109]:
+    - button "Knowledge Graph" [ref=e110] [cursor=pointer]:
+      - generic [ref=e113]: "1"
+      - generic [ref=e114]: Knowledge Graph
+    - button "Personas" [disabled] [ref=e116]:
+      - generic [ref=e118]: "2"
+      - generic [ref=e119]: Personas
+    - button "Variants" [disabled] [ref=e120]:
+      - generic [ref=e122]: "3"
+      - generic [ref=e123]: Variants
+    - button "Report" [disabled] [ref=e124]:
+      - generic [ref=e126]: "4"
+      - generic [ref=e127]: Report
+    - button "Insights" [disabled] [ref=e128]:
+      - generic [ref=e130]: "5"
+      - generic [ref=e131]: Insights

@@ -1,0 +1,71 @@
+[project]
+name = "campaignsim-backend"
+version = "0.1.0"
+description = "CampaignSim - AI Marketing Campaign Simulation & Recommendation Platform"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0" }
+authors = [
+    { name = "CampaignSim" }
+]
+
+dependencies = [
+    # Core framework
+    "flask>=3.0.0",
+    "flask-cors>=6.0.0",
+
+    # LLM
+    "openai>=1.0.0",
+
+    # Local KG engine
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+    "rank-bm25>=0.2.2",
+
+    # OASIS social simulation
+    "camel-oasis==0.2.5",
+    "camel-ai==0.2.78",
+    # torch: CPU-only on Linux (Docker); cap <2.4 for Intel Mac compatibility
+    "torch>=2.0.0,<2.3.0",
+
+    # File processing
+    "PyMuPDF>=1.24.0",
+    # Encoding detection
+    "charset-normalizer>=3.0.0",
+    "chardet>=5.0.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pipreqs>=0.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# Tell uv to use the CPU-only PyTorch index for torch
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+# Use CPU-only index on Linux (Docker); macOS PyPI torch is already CPU-only
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]

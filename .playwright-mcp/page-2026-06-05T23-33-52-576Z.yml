@@ -1,0 +1,14 @@
+- generic [ref=e3]:
+  - generic [ref=e4]: "[plugin:vite:css] [postcss] postcss-import: /Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/src/styles/home.css:279:35: Missed semicolon"
+  - generic [ref=e5]: /Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/src/styles/home.css:279:34
+  - generic [ref=e6]: "277| 278| @keyframes previewFloat { 279| 0%, 100% { transform: translateY(0) box-shadow: 0 0 60px rgba(10,191,173,0.18); } | ^ 280| 50% { transform: translateY(-8px); box-shadow: 0 0 80px rgba(10,191,173,0.28); } 281| }"
+  - generic [ref=e7]: at Input.error (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/input.js:135:16) at Parser.checkMissedSemicolon (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/parser.js:138:22) at Parser.decl (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/parser.js:296:12) at Parser.other (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/parser.js:401:18) at Parser.parse (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/parser.js:472:16) at parse (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/parse.js:11:12) at get root (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/no-work-result.js:43:14) at Result.get [as root] (/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim-v3/frontend/node_modules/postcss/lib/no-work-result.js:77:21) at loadImportContent (file:///Users/abedmreyan/Desktop/Graduation%20Project%202/campaignsim-v3/frontend/node_modules/vite/dist/node/chunks/dep-4-IQbZQm.js:696:33
+  - generic [ref=e8]:
+    - text: Click outside, press Esc key, or fix the code to dismiss.
+    - text: You can also disable this overlay by setting
+    - code [ref=e9]: server.hmr.overlay
+    - text: to
+    - code [ref=e10]: "false"
+    - text: in
+    - code [ref=e11]: vite.config.js
+    - text: .

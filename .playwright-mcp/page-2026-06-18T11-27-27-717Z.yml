@@ -1,0 +1,49 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6] [cursor=pointer]: CAMPAIGNSIM
+    - generic [ref=e8]:
+      - button "Graph" [ref=e9] [cursor=pointer]
+      - button "Split" [ref=e10] [cursor=pointer]
+      - button "Workbench" [ref=e11] [cursor=pointer]
+    - generic [ref=e12]:
+      - button "English ▼" [ref=e14] [cursor=pointer]:
+        - text: English
+        - generic [ref=e15]: ▼
+      - generic [ref=e17]:
+        - generic [ref=e18]: Campaign
+        - generic [ref=e19]: Recommendations
+      - generic [ref=e21]: Generating
+  - main [ref=e23]:
+    - generic [ref=e25]:
+      - generic:
+        - generic [ref=e26]: Graph Relationship Visualization
+        - generic [ref=e27]:
+          - button "↻ Refresh" [ref=e28] [cursor=pointer]:
+            - generic [ref=e29]: ↻
+            - generic [ref=e30]: Refresh
+          - button "⛶" [ref=e31] [cursor=pointer]:
+            - generic [ref=e32]: ⛶
+      - generic [ref=e33]:
+        - generic [ref=e34]: ❖
+        - paragraph [ref=e35]: Waiting for ontology generation...
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Campaign Recommendation Report
+          - generic [ref=e41]: test-id
+        - button "Generate Recommendations" [ref=e43] [cursor=pointer]
+      - generic [ref=e44]:
+        - paragraph [ref=e45]: No recommendation report found for this campaign.
+        - paragraph [ref=e46]:
+          - text: Click
+          - strong [ref=e47]: Generate Recommendations
+          - text: to run the analysis.
+      - generic [ref=e48]:
+        - generic [ref=e49]: Log
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]: 14:27:27.544
+            - generic [ref=e53]: "Checking for existing report: test-id"
+          - generic [ref=e54]:
+            - generic [ref=e55]: 14:27:27.610
+            - generic [ref=e56]: Could not fetch report — backend may be unreachable.

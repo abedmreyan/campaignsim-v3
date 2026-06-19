@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Node / Frontend
+node_modules/
+dist/
+.cache/
+.parcel-cache/
+
+# Environment / Secrets
+.env
+.env.local
+.env.production
+.env.staging
+!.env.example
+
+# Uploads / Runtime data (knowledge graphs, simulations, user files)
+campaignsim/backend/uploads/knowledge_graphs/
+campaignsim/backend/uploads/simulations/
+campaignsim/backend/uploads/*.pdf
+campaignsim/backend/uploads/*.txt
+campaignsim/backend/uploads/*.md
+campaignsim/backend/logs/
+
+# Logs
+*.log
+logs/
+
+# Lock files (keep uv.lock, exclude npm unless committed)
+# uv.lock  # keep — deterministic Python installs
+
+# Playwright MCP session files
+.playwright-mcp/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker runtime
+.docker/
+
+# Large binary / media
+*.docx
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+campaign-*.png
+hero-*.png
+home-*.png
+layout-*.png
+graph-*.png
+v3-*.png
+process-*.png
+history-*.png
+
+# Old versions (exclude from git, they're large and superseded)
+campaignsim-v2/

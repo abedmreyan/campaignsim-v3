@@ -1,0 +1,139 @@
+FRESHBREW COFFEE — BRAND & CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation
+Version: 1.0
+
+=== BRAND OVERVIEW ===
+
+FreshBrew Coffee is a direct-to-consumer specialty coffee brand founded in 2021. We source
+single-origin beans from Colombia, Ethiopia, and Guatemala, and roast in small batches at our
+facility in Austin, Texas. Our core promise is "coffee that respects your body and the planet."
+
+Brand values: Sustainability, Transparency, Wellness, Craft
+Price positioning: Premium (subscription boxes at $28–$45/month)
+Distribution: 100% DTC via website and app. No retail presence.
+Annual revenue: $4.2M (2025), growing 38% YoY.
+
+=== PRODUCTS ===
+
+1. Morning Ritual Blend — Light roast, low-acid, designed for people with sensitive stomachs.
+   Positioning: The healthy morning coffee. Tagline: "Start clean."
+
+2. Focus Fuel Espresso — Dark roast with added adaptogens (ashwagandha, lion's mane).
+   Positioning: Coffee that works with your brain. Tagline: "Think clearer."
+
+3. Cold Brew Concentrate — Ready-to-drink cold brew, 2x concentrate, no sugar added.
+   Positioning: Grab-and-go clean energy. Tagline: "Fast. Clean. Cold."
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — Health-Conscious Millennials (Primary)
+Age: 26–38. Income: $65k–$110k. Location: Urban, tier-1 cities.
+Psychographics: Track macros, buy organic, follow wellness influencers, use Whoop/Oura.
+Platforms: Instagram (daily), TikTok (3–5x/week), Spotify (heavy user).
+Pain points: Existing coffee makes them anxious or crash mid-morning. Want clean energy.
+Buying behaviour: Research-heavy. Read ingredient lists. Value brand transparency.
+Ad response: Skip pre-roll. Engage with UGC and founder-led content. Distrust polished ads.
+
+Segment 2 — Coffee Connoisseurs (Secondary)
+Age: 30–55. Income: $85k–$150k. Location: Suburban, mixed.
+Psychographics: Own a pour-over kit, visit specialty cafes, subscribe to coffee media.
+Platforms: Email (high open rates), Reddit (r/coffee, r/espresso), YouTube.
+Pain points: Subscription boxes deliver inconsistent quality. Want provenance story.
+Buying behaviour: Loyal once converted. Will pay a premium for verifiable single-origin.
+Ad response: Long-form content. Detailed origin stories. Peer recommendations on Reddit.
+
+Segment 3 — Casual Upgraders (Tertiary)
+Age: 22–45. Income: $40k–$75k. Location: Mixed.
+Psychographics: Drink coffee daily but not invested in it as a hobby or lifestyle.
+Platforms: Facebook, YouTube pre-roll, Google search.
+Pain points: Current coffee is "fine" but they want something better without effort.
+Buying behaviour: Price-sensitive. Need a strong CTA and discount to convert.
+Ad response: Respond to promotions, discounts, and convenience messaging.
+
+=== COMPETITORS ===
+
+1. Atlas Coffee Club — Subscription model, strong origin storytelling. Weakness: No wellness angle.
+2. Trade Coffee — Large SKU library, personalization quiz. Weakness: Overwhelming choice.
+3. Starbucks at Home — Mass market, high brand recognition. Weakness: No DTC relationship.
+4. Bulletproof Coffee — Wellness angle, similar price point. Direct competitor for Segment 1.
+
+=== MARKETING CHANNELS IN USE ===
+
+Instagram: Primary channel. Reels + Stories. 42k followers. Avg 4.2% engagement rate.
+Email: 28k subscribers. 34% open rate (above industry avg). High revenue per email.
+TikTok: Emerging. 8k followers. Testing UGC partnerships.
+Google Ads: Search (brand + category). CPA $18.40.
+Influencer partnerships: 12 active micro-influencers (10k–80k followers) in wellness space.
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Drive trial subscriptions for Morning Ritual Blend among Segment 1 (Health-Conscious
+Millennials) and Segment 2 (Coffee Connoisseurs).
+
+Target metric: 500 new trial subscriptions within 30 days of campaign launch.
+Budget: $35,000 across all channels.
+
+Campaign message pillars:
+1. Clean energy without the crash (wellness angle)
+2. Know your bean (provenance/transparency angle)
+3. Better mornings start here (ritual/lifestyle angle)
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Wellness Story" (Instagram Reels, 15-second video)
+Headline: Your coffee shouldn't make you anxious.
+Body: FreshBrew Morning Ritual — low-acid, no jitters, just clean energy. Try your first box free.
+CTA: Start your ritual
+Target segment: Health-Conscious Millennials (Segment 1)
+Channel: Instagram
+Format: Short video / Reel
+
+VARIANT B — "Cafe Culture" (Email Newsletter, long-form)
+Headline: From a farm in Huila, Colombia to your morning cup.
+Body: 600-word story about the Huila cooperative farmers, the roasting process, and what
+single-origin actually means. Includes high-res photography and a tasting notes section.
+CTA: Subscribe and taste the difference
+Target segment: Coffee Connoisseurs (Segment 2)
+Channel: Email
+Format: Long-form HTML newsletter
+
+=== BRAND VOICE ===
+
+Tone: Honest, direct, warm. Not preachy about wellness. Not corporate.
+We say: "Your coffee shouldn't make you anxious."
+We don't say: "Harness the synergistic bioavailability of our adaptogenic blend."
+Visual identity: Clean whites, earth tones, photography-first. No stock photography.
+
+=== AUDIENCE-CHANNEL FIT (Reference for Simulation) ===
+
+Health-Conscious Millennials respond best to:
+- Short-form video on Instagram and TikTok
+- UGC and founder-led content
+- Wellness and lifestyle framing
+- Micro-influencer recommendations from trusted voices
+
+Coffee Connoisseurs respond best to:
+- Long-form written content about origin and craft
+- Email newsletters with detailed tasting notes
+- Reddit discussions and peer reviews
+- YouTube deep-dives on coffee culture
+
+Casual Upgraders respond best to:
+- Promotional offers and discounts
+- Facebook and Google display ads
+- Convenience and value messaging
+- Easy subscription with a strong free-trial hook
+
+=== INFLUENCER PARTNERS ===
+
+ActiveMindset_Ava (Instagram, 54k followers): Wellness, nutrition, morning routines. Segment 1 fit.
+BrewLifestyle (YouTube, 120k subscribers): Coffee culture, pour-over tutorials. Segment 2 fit.
+UrbanWellnessJo (TikTok, 210k followers): Clean eating, clean living. Segment 1 fit.
+TheCoffeeChronicle (Email newsletter, 18k subscribers): Specialty coffee reviews. Segment 2 fit.
+
+=== KNOWN CONSTRAINTS ===
+
+No paid TikTok ads yet (organic only on that platform).
+Email list is warm but has not been segmented by persona type.
+Instagram algorithm penalises text-heavy posts — all content must be visual-first.
+Influencer contracts expire in 60 days — need campaign assets ready before then.

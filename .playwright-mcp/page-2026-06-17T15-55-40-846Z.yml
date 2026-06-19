@@ -1,0 +1,172 @@
+- generic [ref=e3]:
+  - generic:
+    - img
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: CS
+      - strong [ref=e7]: CampaignSim
+    - generic [ref=e8]:
+      - generic [ref=e9]: API pending
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "✦ Cinematic" [ref=e11] [cursor=pointer]:
+        - /url: /home-v2
+      - button "Switch to light mode" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+      - link "Start simulation" [ref=e15] [cursor=pointer]:
+        - /url: /process
+  - main [ref=e16]:
+    - region "See which campaign wins before you launch." [ref=e17]:
+      - generic [ref=e18]:
+        - paragraph [ref=e19]: Campaign intelligence
+        - heading "See which campaign wins before you launch." [level=1] [ref=e21]:
+          - text: See which campaign
+          - generic [ref=e22]: wins
+          - text: before you launch.
+        - paragraph [ref=e23]: Upload a brand brief, build a knowledge graph and synthetic audience, run A/B simulations, and get a ranked report—with persona interviews on the winning variant.
+        - generic "Product highlights" [ref=e24]:
+          - generic [ref=e25]:
+            - img [ref=e26]
+            - text: Knowledge graph AI
+          - generic [ref=e28]:
+            - img [ref=e29]
+            - text: Synthetic personas
+          - generic [ref=e31]:
+            - img [ref=e32]
+            - text: A/B simulation
+          - generic [ref=e34]:
+            - img [ref=e35]
+            - text: Exportable report
+        - generic [ref=e37]:
+          - link "Start simulation" [ref=e38] [cursor=pointer]:
+            - /url: /process
+          - link "View history" [ref=e39] [cursor=pointer]:
+            - /url: /history
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e46]: "CampaignSim · Run #47"
+          - generic [ref=e47]: Live
+        - generic [ref=e49]:
+          - img [ref=e50]
+          - generic [ref=e65]: Knowledge graph
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - img [ref=e69]
+            - generic [ref=e71]: Graph
+          - generic [ref=e72]:
+            - img [ref=e74]
+            - generic [ref=e76]: Personas
+          - generic [ref=e77]:
+            - img [ref=e79]
+            - generic [ref=e81]: Variants
+          - generic [ref=e82]:
+            - generic [ref=e84]: Report
+            - generic [ref=e85]: running
+          - generic [ref=e88]: Chat
+        - generic [ref=e89]:
+          - generic [ref=e90]: Variant comparison
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - generic [ref=e93]: A
+              - generic [ref=e96]: 78%
+            - generic [ref=e97]:
+              - generic [ref=e98]: B
+              - generic [ref=e101]: 54%
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]: +24%
+            - generic [ref=e105]: lift
+          - generic [ref=e106]:
+            - generic [ref=e107]: "847"
+            - generic [ref=e108]: personas
+          - generic [ref=e109]:
+            - generic [ref=e110]: 5/5
+            - generic [ref=e111]: steps
+    - region "Ready to test your campaign brief?" [ref=e112]:
+      - generic [ref=e114]:
+        - heading "Ready to test your campaign brief?" [level=2] [ref=e115]
+        - paragraph [ref=e116]: Upload your brand materials on Step 1—PDF, Markdown, or plain text. The workflow builds your graph, personas, variants, and ranked report from there.
+        - list "Supported file types on Step 1" [ref=e117]:
+          - listitem [ref=e118]: PDF
+          - listitem [ref=e119]: Markdown
+          - listitem [ref=e120]: Plain text
+        - button "Continue to upload" [ref=e121] [cursor=pointer]
+    - region "From guesswork to evidence" [ref=e122]:
+      - generic [ref=e123]: 01 — Why simulate
+      - heading "From guesswork to evidence" [level=2] [ref=e124]
+      - generic [ref=e125]:
+        - generic [ref=e126]:
+          - generic [ref=e127]: Before
+          - heading "Without simulation" [level=3] [ref=e128]
+          - list [ref=e129]:
+            - listitem [ref=e130]: Launch budgets on gut feel and fragmented briefs.
+            - listitem [ref=e131]: No shared view of audience segments or message fit.
+            - listitem [ref=e132]: Learn what works only after wasted spend.
+        - img [ref=e134]
+        - generic [ref=e136]:
+          - generic [ref=e137]: With CampaignSim
+          - heading "Structured, evidence-led" [level=3] [ref=e138]
+          - list [ref=e139]:
+            - listitem [ref=e140]: Graph extracted from your PDF or text upload.
+            - listitem [ref=e141]: Personas and variants tested in one connected workflow.
+            - listitem [ref=e142]: Ranked report with engagement and segment breakdowns.
+    - region "Five steps from brief to decision" [ref=e143]:
+      - generic [ref=e144]: 02 — How it works
+      - generic [ref=e145]:
+        - heading "Five steps from brief to decision" [level=2] [ref=e146]
+        - paragraph [ref=e147]: Each stage builds on the last—upload once, then move through the pipeline without re-entering context.
+      - generic [ref=e148]:
+        - article [ref=e149]:
+          - emphasis [ref=e150]: "1"
+          - strong [ref=e151]: Knowledge Graph
+          - generic [ref=e152]: Extract entities and relationships from your brand brief.
+        - article [ref=e153]:
+          - emphasis [ref=e154]: "2"
+          - strong [ref=e155]: Audience Personas
+          - generic [ref=e156]: Build segment-aware synthetic customers at scale.
+        - article [ref=e157]:
+          - emphasis [ref=e158]: "3"
+          - strong [ref=e159]: Campaign Variants
+          - generic [ref=e160]: Draft message variants across channels for testing.
+        - article [ref=e161]:
+          - emphasis [ref=e162]: "4"
+          - strong [ref=e163]: Insights Report
+          - generic [ref=e164]: Rank variants with engagement and segment breakdowns.
+        - article [ref=e165]:
+          - emphasis [ref=e166]: "5"
+          - strong [ref=e167]: Persona Insights
+          - generic [ref=e168]: Interview winning personas and export findings.
+    - region "Built for the full campaign loop" [ref=e169]:
+      - generic [ref=e170]: 03 — Capabilities
+      - heading "Built for the full campaign loop" [level=2] [ref=e171]
+      - generic [ref=e172]:
+        - article [ref=e173]:
+          - img [ref=e175]
+          - generic [ref=e180]:
+            - heading "Knowledge graph extraction" [level=3] [ref=e181]
+            - paragraph [ref=e182]: Turn PDFs and text briefs into a searchable graph of brand entities, claims, and relationships.
+        - article [ref=e183]:
+          - img [ref=e185]
+          - generic [ref=e190]:
+            - heading "Synthetic persona panel" [level=3] [ref=e191]
+            - paragraph [ref=e192]: Generate segment-aware audiences grounded in your uploaded context—not generic personas.
+        - article [ref=e193]:
+          - img [ref=e195]
+          - generic [ref=e197]:
+            - heading "A/B simulation run" [level=3] [ref=e198]
+            - paragraph [ref=e199]: Compare variants with live-style progress, per-variant metrics, and mission-control visibility.
+        - article [ref=e200]:
+          - img [ref=e202]
+          - generic [ref=e205]:
+            - heading "Report and persona chat" [level=3] [ref=e206]
+            - paragraph [ref=e207]: Surface a ranked winner with charts, then interview personas on the winning message.
+    - region "Run your first simulation today." [ref=e208]:
+      - generic [ref=e209]:
+        - paragraph [ref=e210]: Ready to start
+        - heading "Run your first simulation today." [level=2] [ref=e212]
+        - paragraph [ref=e213]: Open the workflow with instant mock data—no backend required—or connect a live API when ready.
+        - generic [ref=e214]:
+          - link "Start simulation" [ref=e215] [cursor=pointer]:
+            - /url: /process
+          - link "View history" [ref=e216] [cursor=pointer]:
+            - /url: /history

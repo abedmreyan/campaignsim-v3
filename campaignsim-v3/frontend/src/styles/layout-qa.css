@@ -1,0 +1,72 @@
+/**
+ * Responsive layout — frozen for demo (do not add visual features here).
+ * Breakpoints: 1080 (stack), 760 (mobile), 480 (narrow mobile).
+ * Shell max: 1920px via --shell-max.
+ */
+
+/* Prevent grid children from forcing horizontal page scroll */
+.dashboard-grid > *,
+.content-panel > * {
+  min-width: 0;
+}
+
+/* 1280px+ keeps three columns; sidebars scale down between 1081–1439 */
+@media (min-width: 1081px) and (max-width: 1439px) {
+  .dashboard-grid {
+    grid-template-columns: 210px minmax(0, 1fr) 272px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .dashboard-grid {
+    grid-template-columns: 240px minmax(0, 1fr) 300px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard-grid {
+    grid-template-columns: 260px minmax(0, 1fr) 320px;
+  }
+}
+
+/* Wide screens: readable prose without empty full-width text blocks */
+@media (min-width: 1440px) {
+  .page-header p,
+  .home-hero-split__lead,
+  .report-hero__rationale,
+  .report-view .lead,
+  .recommendation-summary p {
+    max-width: 68ch;
+  }
+}
+
+/* Data-dense regions stay full width inside their cards */
+.report-sections,
+.report-charts,
+.table-wrap,
+.chart-panel,
+.mini-chart,
+.graph-panel,
+.history-grid,
+.persona-grid,
+.variant-list {
+  max-width: 100%;
+}
+
+.history-grid,
+.persona-grid,
+.variant-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+.report-charts .app-card,
+.two-column > .app-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-charts .chart-panel,
+.report-charts .mini-chart {
+  flex: 1;
+  width: 100%;
+}

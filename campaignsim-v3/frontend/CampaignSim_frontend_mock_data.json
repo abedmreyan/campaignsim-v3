@@ -1,0 +1,350 @@
+{
+  "project": {
+    "project_id": "proj_123",
+    "simulation_id": "sim_123",
+    "graph_id": "graph_123",
+    "project_name": "FreshBrew Launch Campaign",
+    "status": "draft",
+    "created_at": "2026-05-16T10:00:00Z"
+  },
+  "graph": {
+    "graph_id": "graph_123",
+    "nodes": [
+      {
+        "id": "brand_1",
+        "label": "FreshBrew Coffee",
+        "type": "Brand",
+        "degree": 4,
+        "attributes": {
+          "category": "Coffee"
+        }
+      },
+      {
+        "id": "product_1",
+        "label": "Cold Brew Concentrate",
+        "type": "Product",
+        "degree": 3,
+        "attributes": {
+          "price_point": "$9.99"
+        }
+      },
+      {
+        "id": "persona_1",
+        "label": "Urban Professionals",
+        "type": "CustomerPersona",
+        "degree": 5,
+        "attributes": {
+          "age_range": "25-40"
+        }
+      },
+      {
+        "id": "channel_1",
+        "label": "Instagram",
+        "type": "MarketingChannel",
+        "degree": 3,
+        "attributes": {
+          "typical_audience": "18-35"
+        }
+      },
+      {
+        "id": "format_1",
+        "label": "VideoAd",
+        "type": "ContentFormat",
+        "degree": 2,
+        "attributes": {
+          "engagement_potential": "high"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_1",
+        "source": "brand_1",
+        "target": "product_1",
+        "type": "OFFERS",
+        "weight": 1
+      },
+      {
+        "id": "edge_2",
+        "source": "brand_1",
+        "target": "persona_1",
+        "type": "TARGETS",
+        "weight": 1
+      },
+      {
+        "id": "edge_3",
+        "source": "persona_1",
+        "target": "channel_1",
+        "type": "ACTIVE_ON",
+        "weight": 1
+      },
+      {
+        "id": "edge_4",
+        "source": "persona_1",
+        "target": "format_1",
+        "type": "RESPONDS_TO",
+        "weight": 1
+      }
+    ]
+  },
+  "personas": [
+    {
+      "user_id": 1,
+      "user_name": "@alex_m",
+      "name": "Alex Carter",
+      "bio": "Marketing manager and daily commuter who drinks cold brew every morning.",
+      "persona": "Alex is a busy urban professional who values convenience, taste, and quick routines. He usually discovers new products through Instagram videos and colleague recommendations.",
+      "age": 28,
+      "gender": "male",
+      "mbti": "ENTJ",
+      "country": "UK",
+      "profession": "Marketing Manager",
+      "interested_topics": [
+        "coffee",
+        "fitness",
+        "productivity"
+      ],
+      "platform_preferences": [
+        "Instagram",
+        "LinkedIn"
+      ],
+      "karma": 74,
+      "friend_count": 320,
+      "follower_count": 4200,
+      "segment": "Urban Professionals"
+    },
+    {
+      "user_id": 2,
+      "user_name": "@sarah_ux",
+      "name": "Sarah Miller",
+      "bio": "UX designer who values sustainability and clean product messaging.",
+      "persona": "Sarah prefers brands that explain their values clearly. She is more likely to engage with educational carousel posts and emails that feel personal rather than aggressive.",
+      "age": 32,
+      "gender": "female",
+      "mbti": "INFJ",
+      "country": "US",
+      "profession": "UX Designer",
+      "interested_topics": [
+        "design",
+        "wellness",
+        "sustainability"
+      ],
+      "platform_preferences": [
+        "Instagram",
+        "Email"
+      ],
+      "karma": 68,
+      "friend_count": 210,
+      "follower_count": 1600,
+      "segment": "Creative Professionals"
+    }
+  ],
+  "variants": [
+    {
+      "variant_id": "v1",
+      "variant_name": "Speed VideoAd",
+      "channel": "instagram",
+      "content": {
+        "format": "VideoAd",
+        "headline": "Zero Sugar. Zero Wait.",
+        "body": "Premium cold brew ready in 30 seconds.",
+        "cta": "Try it — 20% off",
+        "visual_desc": "Fast-paced morning commute video with cold brew shots.",
+        "email_subject": "",
+        "tone": "playful"
+      },
+      "target_segment": "Urban Professionals",
+      "max_rounds": 10,
+      "status": "pending"
+    },
+    {
+      "variant_id": "v2",
+      "variant_name": "Quality Email",
+      "channel": "email",
+      "content": {
+        "format": "EmailNewsletter",
+        "headline": "Your mornings just got better",
+        "body": "Discover a smoother cold brew experience.",
+        "cta": "Get 20% off your first order",
+        "visual_desc": "",
+        "email_subject": "Your mornings just got better",
+        "tone": "professional"
+      },
+      "target_segment": "",
+      "max_rounds": 10,
+      "status": "pending"
+    }
+  ],
+  "simulationStatus": {
+    "simulation_id": "sim_123",
+    "run_id": "run_ab_123",
+    "status": "running",
+    "progress": 45,
+    "current_round": 5,
+    "max_rounds": 10,
+    "variants": [
+      {
+        "variant_id": "v1",
+        "variant_name": "Speed VideoAd",
+        "status": "running",
+        "progress": 60,
+        "current_round": 6,
+        "max_rounds": 10
+      },
+      {
+        "variant_id": "v2",
+        "variant_name": "Quality Email",
+        "status": "running",
+        "progress": 30,
+        "current_round": 3,
+        "max_rounds": 10
+      }
+    ]
+  },
+  "results": [
+    {
+      "variant_id": "v1",
+      "variant_name": "Speed VideoAd",
+      "channel": "instagram",
+      "content_format": "VideoAd",
+      "target_segment": "Urban Professionals",
+      "tone": "playful",
+      "total_agents": 30,
+      "total_actions": 85,
+      "engagement_score": 0.3567,
+      "engagement_rate_pct": 35.67,
+      "trend": "improving",
+      "action_breakdown": {
+        "DO_NOTHING": 40,
+        "LIKE_POST": 25,
+        "CREATE_POST": 10,
+        "REPOST": 7,
+        "QUOTE_POST": 2,
+        "FOLLOW": 1
+      },
+      "per_round_engagement": [
+        0.25,
+        0.28,
+        0.32,
+        0.35,
+        0.38
+      ],
+      "segment_scores": [
+        {
+          "segment": "Urban Professionals",
+          "engagement_rate_pct": 42.5
+        }
+      ]
+    },
+    {
+      "variant_id": "v2",
+      "variant_name": "Quality Email",
+      "channel": "email",
+      "content_format": "EmailNewsletter",
+      "target_segment": "",
+      "tone": "professional",
+      "total_agents": 30,
+      "total_actions": 52,
+      "engagement_score": 0.194,
+      "engagement_rate_pct": 19.4,
+      "trend": "declining",
+      "action_breakdown": {
+        "DO_NOTHING": 62,
+        "LIKE_POST": 14,
+        "CREATE_POST": 5,
+        "REPOST": 2,
+        "QUOTE_POST": 1,
+        "FOLLOW": 0
+      },
+      "per_round_engagement": [
+        0.25,
+        0.23,
+        0.2,
+        0.17,
+        0.12
+      ],
+      "segment_scores": [
+        {
+          "segment": "Urban Professionals",
+          "engagement_rate_pct": 21.2
+        }
+      ]
+    }
+  ],
+  "report": {
+    "report_id": "report_123",
+    "simulation_id": "sim_123",
+    "status": "completed",
+    "executive_summary": "Speed VideoAd is the strongest option because it achieved the highest engagement rate and showed an improving trend.",
+    "top_recommendation": {
+      "variant_id": "v1",
+      "variant_name": "Speed VideoAd",
+      "reason": "Highest engagement rate, strongest trend, and best response from Urban Professionals."
+    },
+    "ranked_variants": [
+      {
+        "rank": 1,
+        "variant_id": "v1",
+        "variant_name": "Speed VideoAd",
+        "channel": "instagram",
+        "content_format": "VideoAd",
+        "engagement_rate_pct": 35.67,
+        "trend": "improving"
+      },
+      {
+        "rank": 2,
+        "variant_id": "v2",
+        "variant_name": "Quality Email",
+        "channel": "email",
+        "content_format": "EmailNewsletter",
+        "engagement_rate_pct": 19.4,
+        "trend": "declining"
+      }
+    ],
+    "segment_performance": [
+      {
+        "segment": "Urban Professionals",
+        "best_variant_id": "v1",
+        "engagement_rate_pct": 42.5
+      }
+    ],
+    "channel_effectiveness": [
+      {
+        "channel": "instagram",
+        "average_engagement_rate_pct": 35.67
+      },
+      {
+        "channel": "email",
+        "average_engagement_rate_pct": 19.4
+      }
+    ],
+    "content_format_rankings": [
+      {
+        "format": "VideoAd",
+        "average_engagement_rate_pct": 35.67
+      },
+      {
+        "format": "EmailNewsletter",
+        "average_engagement_rate_pct": 19.4
+      }
+    ],
+    "strategic_recommendations": [
+      "Allocate the majority of launch budget to Instagram video ads.",
+      "Use email as a supporting retargeting channel.",
+      "Target Urban Professionals first because they showed the strongest engagement."
+    ]
+  },
+  "history": [
+    {
+      "simulation_id": "sim_123",
+      "project_name": "FreshBrew Launch Campaign",
+      "status": "completed",
+      "created_at": "2026-05-16T10:00:00Z",
+      "updated_at": "2026-05-16T10:25:00Z",
+      "graph_id": "graph_123",
+      "report_id": "report_123",
+      "variants_count": 2,
+      "top_variant_name": "Speed VideoAd"
+    }
+  ]
+}

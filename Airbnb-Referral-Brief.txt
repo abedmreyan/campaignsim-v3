@@ -1,0 +1,66 @@
+AIRBNB REFERRAL PROGRAM 2.0 — CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published Airbnb Growth Team Case Study (Referrals 2.0)
+
+=== BRAND OVERVIEW ===
+
+Airbnb is a global travel community that offers magical end-to-end trips, including where you stay, what you do and the people you meet. Our platform connects hosts who have space to spare with guests looking for unique accommodations. 
+
+Brand values: Belonging, Community, Trust, Human Connection.
+Market positioning: The alternative to sterile hotels. Travel like a local.
+
+=== THE REFERRAL PROGRAM ===
+
+Airbnb's referral program is a double-sided incentive system. When an existing user (the referrer) invites a friend, and that friend completes their first trip, both users receive $25 in travel credit.
+
+This program is critical for our growth loop, as acquired users acquired through referrals tend to have higher lifetime value (LTV) and better retention than users acquired through paid channels.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The Community Advocate
+Age: 25–40. 
+Psychographics: High empathy, values shared experiences, views travel as a way to connect with friends. Frequently travels in groups or coordinates trips.
+Platforms: Email (primary channel for account notifications), Facebook, WhatsApp.
+Buying behaviour: Highly loyal to Airbnb. Recommends products they love to friends natively.
+Ad response: Resistant to aggressive sales copy. Responds well to authentic, community-driven messaging and opportunities to be generous.
+
+Segment 2 — The Value Maximizer
+Age: 22–35. 
+Psychographics: Budget-conscious travelers, "travel hackers", highly active on social media. Looking for ways to offset the cost of their next vacation.
+Platforms: Email, Twitter, Deal sites/subreddits.
+Buying behaviour: Price sensitive. Compares Airbnb vs hotels based on total cost. 
+Ad response: Highly responsive to monetary incentives, discounts, and clear ROI messaging.
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Drive referral program participation (invites sent) among existing Airbnb users via email.
+
+Context: We are relaunching the referral program (Referrals 2.0) and testing the core value proposition messaging in the email invite sent to our existing user base. The incentive is identical in both variants ($25 for you, $25 for them), but the psychological framing is different.
+
+Target metric: Highest number of invites sent per 1000 emails delivered.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Altruistic Framing" (The "Give" Message)
+Headline: Give your friends $25 to travel.
+Body: Send your friends a $25 Airbnb credit. When they travel, you'll get $25 too. Sharing is caring.
+CTA: Send $25
+Target segment: Community Advocate (Segment 1)
+Channel: Email
+Format: Transactional/Promotional Email
+
+VARIANT B — "Selfish Framing" (The "Get" Message)
+Headline: Invite your friends, get $25.
+Body: Want $25 for your next trip? Invite your friends to Airbnb. When they travel, you both get $25.
+CTA: Get $25
+Target segment: Value Maximizer (Segment 2)
+Channel: Email
+Format: Transactional/Promotional Email
+
+=== BRAND VOICE ===
+
+Tone: Inspiring, personal, human-centric.
+We focus on the experience and the connection, not just the transaction.
+
+=== REAL-WORLD GROUND TRUTH (DO NOT INCLUDE IN SIMULATION GOAL) ===
+In the actual published A/B test by the Airbnb Growth team, Variant A (Altruistic) outperformed Variant B (Selfish) significantly across a massive sample size. The altruistic framing reduced social friction, making users feel generous rather than feeling like they were exploiting their friends for a payout.

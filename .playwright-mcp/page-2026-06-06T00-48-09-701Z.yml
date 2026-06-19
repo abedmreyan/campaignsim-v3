@@ -1,0 +1,115 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "CS CampaignSim" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e7]: CS
+      - generic: CampaignSim
+    - button "Expand sidebar" [ref=e8] [cursor=pointer]:
+      - img [ref=e9]
+    - navigation "Main navigation" [ref=e11]:
+      - link "Home" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - generic: Home
+      - link "Simulations" [ref=e15] [cursor=pointer]:
+        - /url: /process
+        - img [ref=e16]
+        - generic: Simulations
+      - link "Graph" [ref=e18] [cursor=pointer]:
+        - /url: /graph
+        - img [ref=e19]
+        - generic: Graph
+      - link "History" [ref=e24] [cursor=pointer]:
+        - /url: /history
+        - img [ref=e25]
+        - generic: History
+    - generic [ref=e29]: Integrations
+    - generic "CRM Integrations — Coming soon":
+      - img
+      - generic: CRM
+      - generic: Soon
+    - generic "User Enrollment — Coming soon":
+      - img
+      - generic: Users
+      - generic: Soon
+    - button "Settings" [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+      - generic [ref=e34]: Settings
+    - generic [ref=e35]:
+      - generic [ref=e36]: A
+      - generic: Account
+  - banner [ref=e37]:
+    - generic [ref=e38]:
+      - heading "Campaign workspace" [level=1] [ref=e39]
+      - generic [ref=e40]: Draft
+    - generic "Project metrics" [ref=e41]:
+      - generic [ref=e42]:
+        - img [ref=e43]
+        - text: 0 personas
+      - generic [ref=e46]:
+        - img [ref=e47]
+        - text: 0 variants
+      - generic [ref=e49]:
+        - img [ref=e50]
+        - text: 0%
+    - generic [ref=e52]:
+      - generic [ref=e53]: Live
+      - button "Switch to dark mode" [active] [ref=e128] [cursor=pointer]:
+        - img [ref=e129]
+  - main [ref=e57]:
+    - generic:
+      - img
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - paragraph [ref=e61]: Step 1 · Brand Intelligence
+        - heading "Build your brand intelligence map" [level=1] [ref=e62]
+        - paragraph [ref=e63]: Start by telling us about your brand. Our AI extracts products, audiences, channels, and values into a structured knowledge graph that powers your campaign simulations.
+      - generic [ref=e64]:
+        - button "Recommended AI-Guided Setup Answer a few questions and our AI builds a comprehensive intelligence map — no document needed. 5-minute guided questionnaire Live intelligence preview No document required Get started" [ref=e65] [cursor=pointer]:
+          - generic [ref=e66]: Recommended
+          - img [ref=e68]
+          - heading "AI-Guided Setup" [level=2] [ref=e71]
+          - paragraph [ref=e72]: Answer a few questions and our AI builds a comprehensive intelligence map — no document needed.
+          - list [ref=e73]:
+            - listitem [ref=e74]: 5-minute guided questionnaire
+            - listitem [ref=e75]: Live intelligence preview
+            - listitem [ref=e76]: No document required
+          - generic [ref=e77]:
+            - text: Get started
+            - generic [ref=e78]: →
+        - button "Upload Brief Upload your existing campaign brief, strategy doc, or pitch deck and AI extracts the intelligence. PDF or text file Up to 10 MB Automatic entity extraction Upload file" [ref=e79] [cursor=pointer]:
+          - img [ref=e81]
+          - heading "Upload Brief" [level=2] [ref=e85]
+          - paragraph [ref=e86]: Upload your existing campaign brief, strategy doc, or pitch deck and AI extracts the intelligence.
+          - list [ref=e87]:
+            - listitem [ref=e88]: PDF or text file
+            - listitem [ref=e89]: Up to 10 MB
+            - listitem [ref=e90]: Automatic entity extraction
+          - generic [ref=e91]:
+            - text: Upload file
+            - generic [ref=e92]: →
+        - generic [ref=e93]:
+          - generic [ref=e94]: Coming soon
+          - img [ref=e96]
+          - heading "Import from URL" [level=2] [ref=e99]
+          - paragraph [ref=e100]: Connect your website, CRM, or content hub and we'll extract brand intelligence automatically.
+          - list [ref=e101]:
+            - listitem [ref=e102]: Website crawling
+            - listitem [ref=e103]: HubSpot / Salesforce
+            - listitem [ref=e104]: Auto-sync on demand
+  - navigation "Workflow steps" [ref=e105]:
+    - button "Knowledge Graph" [ref=e106] [cursor=pointer]:
+      - generic [ref=e109]: "1"
+      - generic [ref=e110]: Knowledge Graph
+    - button "Personas" [disabled] [ref=e112]:
+      - generic [ref=e114]: "2"
+      - generic [ref=e115]: Personas
+    - button "Variants" [disabled] [ref=e116]:
+      - generic [ref=e118]: "3"
+      - generic [ref=e119]: Variants
+    - button "Report" [disabled] [ref=e120]:
+      - generic [ref=e122]: "4"
+      - generic [ref=e123]: Report
+    - button "Insights" [disabled] [ref=e124]:
+      - generic [ref=e126]: "5"
+      - generic [ref=e127]: Insights

@@ -1,0 +1,480 @@
+.step-fade-enter-active,
+.step-fade-leave-active,
+.view-enter-active,
+.view-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.step-fade-enter-from,
+.step-fade-leave-to,
+.view-enter-from,
+.view-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.view-enter-from,
+.view-leave-to {
+  transform: scale(0.98) translateY(6px);
+}
+
+.stagger-in > * {
+  animation: staggerFade 0.55s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+.stagger-in > *:nth-child(1) {
+  animation-delay: 0.03s;
+}
+.stagger-in > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.stagger-in > *:nth-child(3) {
+  animation-delay: 0.09s;
+}
+.stagger-in > *:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.stagger-in > *:nth-child(5) {
+  animation-delay: 0.15s;
+}
+.stagger-in > *:nth-child(6) {
+  animation-delay: 0.18s;
+}
+.stagger-in > *:nth-child(7) {
+  animation-delay: 0.21s;
+}
+.stagger-in > *:nth-child(8) {
+  animation-delay: 0.24s;
+}
+.stagger-in > *:nth-child(9) {
+  animation-delay: 0.27s;
+}
+.stagger-in > *:nth-child(10) {
+  animation-delay: 0.3s;
+}
+.stagger-in > *:nth-child(11) {
+  animation-delay: 0.33s;
+}
+.stagger-in > *:nth-child(12) {
+  animation-delay: 0.36s;
+}
+
+@keyframes staggerFade {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: var(--glow-accent-sm);
+  }
+  50% {
+    box-shadow: var(--glow-accent);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes borderGlow {
+  0%,
+  100% {
+    border-color: rgba(10, 191, 173, 0.35);
+  }
+  50% {
+    border-color: rgba(0, 201, 122, 0.5);
+  }
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ambientPulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes demoDotPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(0, 201, 122, 0.2), 0 0 10px rgba(10, 191, 173, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(0, 201, 122, 0.45), 0 0 18px rgba(10, 191, 173, 0.5);
+  }
+}
+
+@keyframes badgeSettle {
+  0% {
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.2);
+  }
+}
+
+@keyframes reportMetricReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progressGlow {
+  0% {
+    filter: drop-shadow(0 0 4px rgba(10, 191, 173, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(0, 201, 122, 0.55));
+  }
+  100% {
+    filter: drop-shadow(0 0 4px rgba(10, 191, 173, 0.4));
+  }
+}
+
+.is-pulsing {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+.progress-bar span {
+  animation: progressGlow 2.5s ease-in-out infinite;
+  background: var(--gradient-accent) !important;
+  background-size: 200% 100% !important;
+}
+
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(10, 191, 173, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+}
+
+.chat-typing span {
+  background: var(--color-accent) !important;
+  box-shadow: 0 0 8px rgba(10, 191, 173, 0.6);
+}
+
+.chat-msg-enter-active,
+.chat-msg-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.chat-msg-enter-from,
+.chat-msg-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.chat-msg-move {
+  transition: transform 0.22s ease;
+}
+
+/* ── Rich new keyframes ───────────────────────────────────────────────────── */
+
+/* Cards power on: flicker-to-life with brightness flash */
+@keyframes powerOn {
+  0%   { opacity: 0; transform: scale(0.96) translateY(14px); filter: brightness(0.2) blur(2px); }
+  35%  { opacity: 0.85; filter: brightness(1.18) blur(0px); }
+  55%  { transform: scale(1.004) translateY(-2px); filter: brightness(0.92); }
+  80%  { transform: scale(0.998) translateY(0.5px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: brightness(1); }
+}
+
+/* Scan from left — for eyebrows, badges, labels */
+@keyframes scanFromLeft {
+  from { clip-path: inset(0 100% 0 0); opacity: 0; }
+  to   { clip-path: inset(0 0% 0 0);   opacity: 1; }
+}
+
+/* Text slide-up reveal — for hero headings */
+@keyframes textSlideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Chip pop-in */
+@keyframes chipBounceIn {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.88); }
+  65%  { transform: translateY(-3px) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Button shimmer sweep */
+@keyframes buttonShimmer {
+  from { transform: translateX(-100%) skewX(-18deg); }
+  to   { transform: translateX(260%) skewX(-18deg); }
+}
+
+/* Background orb drift */
+@keyframes orbDrift {
+  0%,  100% { transform: translate(0, 0)    scale(1);    opacity: 0.16; }
+  25%        { transform: translate(4%, -3%) scale(1.04); opacity: 0.24; }
+  50%        { transform: translate(-2%, 4%) scale(0.96); opacity: 0.18; }
+  75%        { transform: translate(2%, 1%)  scale(1.02); opacity: 0.21; }
+}
+
+/* Dot-grid background pulse */
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.035; }
+  50%       { opacity: 0.08;  }
+}
+
+/* Radial orb breathe */
+@keyframes orbBreathe {
+  0%, 100% { transform: scale(1);    opacity: 0.18; }
+  50%       { transform: scale(1.1); opacity: 0.28; }
+}
+
+/* Number / stat reveal */
+@keyframes statReveal {
+  from { opacity: 0; transform: translateY(14px) scale(0.88); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* Connector line draw */
+@keyframes drawLine {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+
+/* Step active ring pulse */
+@keyframes activeRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(10, 191, 173, 0.55); }
+  50%       { box-shadow: 0 0 0 5px rgba(10, 191, 173, 0); }
+}
+
+/* ── Scroll reveal utilities ─────────────────────────────────────────────── */
+/* Elements are VISIBLE by default. JS adds .scroll-hidden before observing,  */
+/* then replaces it with .is-revealed when they enter the viewport.            */
+
+.scroll-hidden {
+  opacity: 0 !important;
+  transform: translateY(24px) !important;
+}
+.scroll-hidden-left {
+  opacity: 0 !important;
+  transform: translateX(-24px) !important;
+}
+.scroll-hidden-scale {
+  opacity: 0 !important;
+  transform: scale(0.93) !important;
+}
+
+.reveal.is-revealed {
+  animation: textSlideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.reveal-left.is-revealed {
+  animation: scanFromLeft 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.reveal-scale.is-revealed {
+  animation: scaleReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes scaleReveal {
+  from { opacity: 0; transform: scale(0.93) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Stagger delays for reveal groups */
+.reveal-group .reveal:nth-child(1),
+.reveal-group .reveal-left:nth-child(1),
+.reveal-group .reveal-scale:nth-child(1) { animation-delay: 0.04s; }
+.reveal-group .reveal:nth-child(2),
+.reveal-group .reveal-left:nth-child(2),
+.reveal-group .reveal-scale:nth-child(2) { animation-delay: 0.12s; }
+.reveal-group .reveal:nth-child(3),
+.reveal-group .reveal-left:nth-child(3),
+.reveal-group .reveal-scale:nth-child(3) { animation-delay: 0.20s; }
+.reveal-group .reveal:nth-child(4),
+.reveal-group .reveal-left:nth-child(4),
+.reveal-group .reveal-scale:nth-child(4) { animation-delay: 0.28s; }
+.reveal-group .reveal:nth-child(5),
+.reveal-group .reveal-left:nth-child(5),
+.reveal-group .reveal-scale:nth-child(5) { animation-delay: 0.36s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .step-fade-enter-active,
+  .step-fade-leave-active,
+  .view-enter-active,
+  .view-leave-active,
+  .chat-msg-enter-active,
+  .chat-msg-leave-active {
+    transition-duration: 0.01ms !important;
+  }
+
+  .step-fade-enter-from,
+  .step-fade-leave-to,
+  .view-enter-from,
+  .view-leave-to,
+  .chat-msg-enter-from,
+  .chat-msg-leave-to {
+    transform: none !important;
+  }
+
+  .app-shell::before,
+  .demo-chip__dot,
+  .status-badge--pulse,
+  .progress-card.is-running,
+  .report-hero--winner,
+  .mission-control-panel--running,
+  .is-pulsing,
+  .chat-typing span {
+    animation: none !important;
+  }
+
+  .status-badge--settle {
+    animation: none !important;
+  }
+
+  .stagger-in > *,
+  .report-hero__metrics--reveal > * {
+    animation: none !important;
+  }
+
+  .progress-bar span {
+    animation: none !important;
+  }
+
+  .skeleton-block,
+  .rank-medal,
+  .home-journey__step,
+  .home-bento__tile,
+  .home-preview__node {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes ambientPulse {
+    from,
+    to {
+      opacity: 0.85;
+    }
+  }
+
+  @keyframes borderGlow {
+    from,
+    to {
+      border-color: var(--glass-border-glow);
+    }
+  }
+
+  @keyframes reportMetricReveal {
+    from,
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes staggerFade {
+    from,
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .reveal,
+  .reveal-left,
+  .reveal-scale {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  @keyframes powerOn {
+    from, to { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes orbDrift {
+    from, to { transform: none; opacity: 0.18; }
+  }
+  @keyframes buttonShimmer {
+    from, to { transform: translateX(300%); }
+  }
+}
