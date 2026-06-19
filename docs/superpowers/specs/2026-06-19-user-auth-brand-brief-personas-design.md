@@ -112,6 +112,9 @@ CREATE TABLE personas (
 CREATE INDEX idx_personas_user_brief ON personas(user_id, brand_brief_id);
 
 -- Campaigns (top-level, holds variants)
+-- NOTE: Schema created in this phase for future use; rows are NOT populated in this phase.
+-- Campaign and variant data continues to live in in-memory Pinia state and dataclasses.
+-- Population is deferred to the SaaS/history phase.
 CREATE TABLE campaigns (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -122,6 +125,7 @@ CREATE TABLE campaigns (
 );
 
 -- Campaign variants
+-- NOTE: Same as campaigns — schema only, no writes in this phase.
 CREATE TABLE campaign_variants (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id  UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -153,6 +157,58 @@ CREATE TABLE simulations (
 - **Access token**: JWT, 15-minute TTL, stored in an **httpOnly cookie** (`cs_access`). Short TTL limits exposure if stolen.
 - **Refresh token**: opaque random string (256-bit), 30-day TTL, stored in an **httpOnly cookie** (`cs_refresh`). Its SHA-256 hash is stored in `refresh_tokens` table so it can be revoked on logout or password change.
 - No localStorage token storage — httpOnly cookies are not accessible to JS, protecting against XSS.
+
+### Cookie & CORS configuration
+
+The frontend (port 3006) and backend (port 5001) are different origins, so cookies must be configured carefully or they will silently fail.
+
+**Flask (backend):**
+```python
+# Set on every auth response
+response.set_cookie(
+    'cs_access',
+    value=access_token,
+    httponly=True,
+    secure=True,           # Always True — both local Cloudflare Tunnel and prod use HTTPS
+    samesite='None',       # Cross-origin cookie required; None requires Secure=True
+    max_age=JWT_ACCESS_TTL_MINUTES * 60,
+    domain=None,           # Let the browser infer; don't pin domain in dev
+)
+# Same pattern for cs_refresh
+
+# Flask-CORS — must allow credentials explicitly
+CORS(app,
+     origins=["http://localhost:3006", "https://campaignsim-v3.aethersystems.co"],
+     supports_credentials=True)
+```
+
+**Axios (frontend):**
+```js
+// api.js — apply once globally
+import axios from 'axios'
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,   // http://localhost:5001 or tunnel URL
+  withCredentials: true,                    // Send cookies on every request
+})
+export default api
+```
+
+**Local development note:** Local dev runs over HTTP on port 5001, but `SameSite=None` requires `Secure=True`. In practice, the backend should be reached through the Cloudflare Tunnel (`campaignsim-v3.aethersystems.co`) even during local testing, or a local HTTPS proxy should be used. Alternatively, set `samesite='Lax'` during local development and `samesite='None'` in production — controlled by `FLASK_ENV`.
+
+### Rate limiting (in-scope)
+`flask-limiter` is applied to auth routes to prevent brute-force attacks:
+```python
+limiter = Limiter(app, key_func=get_remote_address)
+
+@limiter.limit("10/minute")
+@auth_bp.route('/login', methods=['POST'])
+def login(): ...
+
+@limiter.limit("5/minute")
+@auth_bp.route('/signup', methods=['POST'])
+def signup(): ...
+```
+`flask-limiter` is added to `requirements.txt`.
 
 ### New API routes
 
@@ -259,6 +315,11 @@ PUT    /api/briefs/<id>         # update name or content (in-place edit)
 DELETE /api/briefs/<id>         # delete brief + cascade personas
 POST   /api/briefs/<id>/upload  # attach / replace the uploaded file
 POST   /api/briefs/<id>/rebuild-graph  # trigger KG rebuild from current content
+                                      # Implementation: writes brand_briefs.content to a
+                                      # temp file under uploads/{user_id}/briefs/,
+                                      # then passes that path to graph_builder (unchanged).
+                                      # Temp file is overwritten on each rebuild; no extra
+                                      # cleanup needed. This avoids refactoring graph_builder.
 ```
 
 ---
@@ -266,9 +327,16 @@ POST   /api/briefs/<id>/rebuild-graph  # trigger KG rebuild from current content
 ## 7. Frontend Changes
 
 ### New views
-- `LoginView.vue` — email + password form, redirects to `/app` on success
-- `SignupView.vue` — same fields + display_name
-- `BrandBriefView.vue` — list user's briefs, create new, edit (inline text editor + file upload), delete, rebuild graph
+- `LoginView.vue` — email + password form, redirects to `/briefs` on success; route `/login`
+- `SignupView.vue` — same fields + display_name; route `/signup`
+- `BrandBriefView.vue` — route `/briefs`; this is the **post-login landing page** and pre-workflow dashboard. The user picks or creates a brand brief here before entering the campaign workflow. Once a brief is selected, the router redirects to `/process` with `brandBriefId` set in Pinia state.
+
+**Navigation flow:**
+```
+/login  →  /briefs  →  /process  →  /graph  →  ...
+           (select brief)  (Step 1 — campaign variants)
+```
+`/` (Home) remains a public marketing page. All workflow routes (`/process`, `/graph`, `/simulation/*`, `/report/*`, `/interaction/*`, `/history`) require auth and a selected `brandBriefId`; the router guard redirects to `/briefs` if either is missing.
 
 ### New store: `authStore.js`
 ```js
@@ -340,6 +408,7 @@ flask-migrate>=4.0
 psycopg2-binary>=2.9
 bcrypt>=4.0
 pyjwt>=2.8
+flask-limiter>=3.5
 ```
 
 ### New `.env` variables
@@ -372,4 +441,4 @@ Existing data in `uploads/` (before auth existed) is orphaned — no user owns i
 | Google/GitHub OAuth? | Deferred — SaaS phase 2 |
 | Team/workspace support? | Deferred — SaaS phase 3 |
 | S3 migration? | Deferred — implement `S3Storage` class when self-hosting limits scale |
-| Rate limiting on auth routes? | Add basic Flask-Limiter on `/api/auth/login` and `/api/auth/signup` to prevent brute force |
+| Rate limiting on auth routes? | **In scope** — see Section 4 (Cookie & CORS configuration). Flask-Limiter applied to `/api/auth/login` (10/min) and `/api/auth/signup` (5/min). |
