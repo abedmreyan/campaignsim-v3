@@ -1136,21 +1136,9 @@ def me():
 
 - [ ] **Step 4: Register auth_bp in api/__init__.py**
 
-Add to `campaignsim/backend/app/api/__init__.py`:
+`auth.py` already declares `auth_bp = Blueprint("auth", __name__)`. Do **not** re-declare it in `__init__.py` — that would create two Blueprint objects with the same name, causing silent routing failures.
 
-```python
-auth_bp = Blueprint('auth', __name__)
-
-from . import auth  # noqa: E402, F401
-```
-
-Then at the bottom, after the existing blueprint imports, add:
-
-```python
-from .auth import auth_bp  # noqa: F401 — re-export for app factory
-```
-
-Actually, given the pattern in `__init__.py`, modify it to:
+Replace the full contents of `campaignsim/backend/app/api/__init__.py` with:
 
 ```python
 """API route module"""
@@ -1161,7 +1149,6 @@ graph_bp = Blueprint('graph', __name__)
 simulation_bp = Blueprint('simulation', __name__)
 report_bp = Blueprint('report', __name__)
 evaluation_bp = Blueprint('evaluation', __name__)
-auth_bp = Blueprint('auth', __name__)
 briefs_bp = Blueprint('briefs', __name__)
 
 from . import graph        # noqa: E402, F401
@@ -1169,9 +1156,12 @@ from . import simulation   # noqa: E402, F401
 from . import report       # noqa: E402, F401
 from . import evaluation   # noqa: E402, F401
 from . import auth         # noqa: E402, F401
+
+# Re-export auth_bp (declared in auth.py) so app factory can import it from here
+from .auth import auth_bp  # noqa: F401
 ```
 
-Note: `briefs_bp` is declared here now, imported in Task 6.
+Note: `briefs_bp` is declared here and imported by `briefs.py` (Task 6). `auth_bp` is declared in `auth.py` and re-exported here.
 
 - [ ] **Step 5: Register auth blueprint in app factory**
 
@@ -1182,12 +1172,12 @@ In `campaignsim/backend/app/__init__.py`, after the existing blueprint registrat
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
 ```
 
-Also wire the limiter:
+Also wire the limiter. The `limiter` object is already created in `auth.py` without an app (so it can decorate routes at import time). Wire it to the app here using `init_app` — do **not** create a second `Limiter(app, ...)` which would produce two limiters and silent rate-limiting failures:
 
 ```python
-    from flask_limiter import Limiter
-    from .api.auth import _get_real_ip
-    limiter = Limiter(app, key_func=_get_real_ip)
+    # Wire flask-limiter to the app (limiter instance lives in auth.py)
+    from .api.auth import limiter as auth_limiter
+    auth_limiter.init_app(app)
 ```
 
 Add this after the CORS setup.
@@ -1600,15 +1590,78 @@ Apply the same pattern to `app/api/report.py` and `app/api/evaluation.py`:
 1. Add `from ..utils.auth_utils import require_auth` and `from flask import g` imports
 2. Add `@require_auth` after every `@<blueprint>.route(...)` decorator
 
-- [ ] **Step 4: Verify syntax on all modified files**
+- [ ] **Step 4: User-scope project data in Project dataclass and graph.py**
+
+`ProjectManager` stores all projects in `uploads/projects/<project_id>/` with no user ownership. After adding `@require_auth`, the route is auth-gated but any authenticated user can still read any other user's project by guessing its UUID. Fix this by embedding `user_id` in the project record.
+
+**4a. Add `user_id` field to `app/models/project.py`:**
+
+In the `Project` dataclass, add a new field after `error`:
+```python
+    user_id: Optional[str] = None   # owner — set on creation, used for access checks
+```
+
+In `Project.to_dict()`, add:
+```python
+            "user_id": self.user_id,
+```
+
+In `Project.from_dict()`, add to the `return cls(...)` call:
+```python
+            user_id=data.get('user_id'),
+```
+
+**4b. Set `user_id` when creating a project in `graph.py`:**
+
+In the route that creates a new project (the `build_graph` route at `POST /build`, around where `Project(...)` is instantiated), pass the current user id:
+
+```python
+project = Project(
+    project_id=...,
+    name=...,
+    status=...,
+    created_at=...,
+    updated_at=...,
+    user_id=g.current_user.id,   # add this field
+)
+```
+
+If other routes also call `Project(...)` without a `user_id`, add `user_id=g.current_user.id` to those calls too.
+
+**4c. Enforce ownership in project-access routes in `graph.py`:**
+
+In routes that load a project by `project_id` (e.g. `get_project`, `delete_project`, `reset_project`, `generate_ontology`, `build_graph`), after loading the project, add an ownership check:
+
+```python
+project = ProjectManager.get_project(project_id)
+if not project:
+    return jsonify({"error": "Not found"}), 404
+if project.user_id and project.user_id != g.current_user.id:
+    return jsonify({"error": "Forbidden"}), 403
+```
+
+The `project.user_id and` guard ensures projects created before this migration (with `user_id=None`) are not accidentally locked out — those are grandfathered.
+
+**4d. Filter project list in `graph.py`:**
+
+In `list_projects` (`GET /project/list`), after fetching all projects, filter to only the current user's projects:
+
+```python
+all_projects = ProjectManager.list_projects()
+# Return only projects owned by current user (or legacy projects with no owner)
+owned = [p for p in all_projects if p.get('user_id') in (None, g.current_user.id)]
+return jsonify({"projects": owned})
+```
+
+- [ ] **Step 5: Verify syntax on all modified files**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim/backend"
-python3 -m py_compile app/api/graph.py app/api/simulation.py app/api/report.py app/api/evaluation.py
+python3 -m py_compile app/models/project.py app/api/graph.py app/api/simulation.py app/api/report.py app/api/evaluation.py
 echo "Syntax OK"
 ```
 
-- [ ] **Step 5: Run Chinese and brand clean checks**
+- [ ] **Step 7: Run Chinese and brand clean checks**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim/backend"
@@ -1618,12 +1671,12 @@ grep -rni "mirofish\|666ghj" --include="*.py" . 2>/dev/null
 
 Expected: no output from either command.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2"
-git add campaignsim/backend/app/api/graph.py campaignsim/backend/app/api/simulation.py campaignsim/backend/app/api/report.py campaignsim/backend/app/api/evaluation.py
-git commit -m "feat: apply require_auth to all existing API routes"
+git add campaignsim/backend/app/models/project.py campaignsim/backend/app/api/graph.py campaignsim/backend/app/api/simulation.py campaignsim/backend/app/api/report.py campaignsim/backend/app/api/evaluation.py
+git commit -m "feat: apply require_auth to all existing routes + user-scope project access"
 ```
 
 ---
@@ -1735,9 +1788,69 @@ python3 -m pytest tests/test_persona_api.py -v 2>&1 | head -20
 
 Expected: 404 errors — persona routes don't exist yet.
 
-- [ ] **Step 3: Add persona routes to simulation.py**
+- [ ] **Step 3: Modify `generate_profiles` to save Persona rows to DB**
 
-At the top of `campaignsim/backend/app/api/simulation.py`, add to imports:
+The `generate_profiles` route runs generation in a background thread (`run_generation`). The thread currently saves profiles to disk only. We need it to also save each profile as a `Persona` DB row.
+
+**3a. Add `brief_id` to the route's accepted body fields** (around the `graph_id` parsing block, ~line 1277 in `simulation.py`):
+
+```python
+        graph_id = data.get('graph_id')
+        if not graph_id:
+            return jsonify({"success": False, "error": t('api.requireGraphId')}), 400
+
+        brief_id = data.get('brief_id')          # NEW — optional; if provided, personas saved to DB
+        simulation_id = data.get('simulation_id')
+```
+
+**3b. Capture the Flask app object before spawning the thread** (immediately before `thread = threading.Thread(...)`):
+
+```python
+        _app = current_app._get_current_object()  # capture for use inside thread
+```
+
+Add `from flask import current_app` to the top of `simulation.py` imports if not already present. Also add:
+
+```python
+from ..db import db as _db
+from ..db.models import Persona
+```
+
+**3c. Add DB save block inside `run_generation()`, after the disk save block** (after the `except Exception as save_err` block that saves to disk, before `task_manager.complete_task(...)`):
+
+```python
+                # Save profiles to DB if a brand_brief_id was provided
+                if brief_id and g_current_user_id:
+                    try:
+                        with _app.app_context():
+                            for prof in profiles_data:
+                                p = Persona(
+                                    user_id=g_current_user_id,
+                                    brand_brief_id=brief_id,
+                                    external_id=prof.get("user_id"),
+                                    segment=prof.get("segment"),
+                                    data=prof,
+                                )
+                                _db.session.add(p)
+                            _db.session.commit()
+                        logger.info(f"Saved {len(profiles_data)} personas to DB for brief {brief_id}")
+                    except Exception as db_err:
+                        logger.warning(f"Could not save personas to DB: {db_err}")
+```
+
+**3d. Capture `g.current_user.id` before the thread starts** (because `g` is not available inside the thread). Add this immediately after the `_app = current_app._get_current_object()` line:
+
+```python
+        from flask import g as _g
+        g_current_user_id = getattr(_g, 'current_user', None)
+        g_current_user_id = g_current_user_id.id if g_current_user_id else None
+```
+
+Note: `generate_profiles` will not have `@require_auth` added in Task 7 if `brief_id` is optional (backward compat). But if `brief_id` is supplied, the route must be auth-gated. Add `@require_auth` to `generate_profiles` in Task 7 Step 2 alongside the other simulation routes.
+
+- [ ] **Step 5: Add persona list/delete/clear routes to simulation.py**
+
+At the top of `campaignsim/backend/app/api/simulation.py`, add to imports (merge with the imports added in Step 3):
 
 ```python
 from ..db import db
@@ -1810,7 +1923,7 @@ def clear_personas():
     return jsonify({"ok": True})
 ```
 
-- [ ] **Step 4: Run persona tests**
+- [ ] **Step 6: Run persona tests**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim/backend"
@@ -1819,14 +1932,14 @@ python3 -m pytest tests/test_persona_api.py -v
 
 Expected: all 4 tests PASS.
 
-- [ ] **Step 5: Verify syntax**
+- [ ] **Step 7: Verify syntax**
 
 ```bash
 python3 -m py_compile app/api/simulation.py
 echo "Syntax OK"
 ```
 
-- [ ] **Step 6: Run all backend tests**
+- [ ] **Step 8: Run all backend tests**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2/campaignsim/backend"
@@ -1835,12 +1948,12 @@ python3 -m pytest tests/ -v
 
 Expected: all 23 tests PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd "/Users/abedmreyan/Desktop/Graduation Project 2"
 git add campaignsim/backend/app/api/simulation.py campaignsim/backend/tests/test_persona_api.py
-git commit -m "feat: persona list/delete/clear routes persisting to DB — 4 tests pass"
+git commit -m "feat: generate_profiles saves to DB + persona list/delete/clear routes — 4 tests pass"
 ```
 
 ---
