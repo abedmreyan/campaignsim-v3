@@ -461,6 +461,7 @@ export const useCampaignStore = defineStore("campaign", {
         const task = await generateProfiles({
           simulation_id: this.simulationId,
           graph_id: this.graphId,
+          brief_id: this.brandBriefId,
           count,
           entity_types: ["CustomerPersona", "Person", "Influencer", "Consumer", "Buyer"],
           language: "en",
@@ -471,7 +472,7 @@ export const useCampaignStore = defineStore("campaign", {
         // personas.items already set from task result in pollProfileGenerationStatus.
         // Fall back to the /profiles endpoint only if task result had no profiles.
         if (!this.personas.items.length) {
-          await this.loadPersonas();
+          await this.loadPersonas(this.brandBriefId);
         }
         this.personas.progress = 100;
         this.personas.progressMessage = `${this.personas.items.length} personas generated`;
@@ -517,11 +518,30 @@ export const useCampaignStore = defineStore("campaign", {
       throw new Error("Profile generation timed out — please try again.");
     },
 
-    async loadPersonas() {
-      const data = await getProfiles(this.simulationId);
-      this.personas.items = data.personas || data.items || data.profiles || [];
-      this.persist();
-      return data;
+    async loadPersonas(briefId) {
+      this.personas.loading = true;
+      this.personas.error = null;
+      try {
+        const { apiClient } = await import("@/api/client.js");
+        const resp = await apiClient.get(`/api/simulation/personas?brief_id=${briefId}`);
+        this.personas.items = resp.data.items;
+      } catch (err) {
+        this.personas.error = err.message || "Failed to load personas";
+      } finally {
+        this.personas.loading = false;
+      }
+    },
+
+    async deletePersona(personaId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.delete(`/api/simulation/persona/${personaId}`);
+      this.personas.items = this.personas.items.filter((p) => p.id !== personaId);
+    },
+
+    async clearPersonas(briefId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.post(`/api/simulation/personas/clear?brief_id=${briefId}`);
+      this.personas.items = [];
     },
 
     addVariant(variant) {
