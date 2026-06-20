@@ -34,3 +34,15 @@ chardet>=5.0.0
 # Utilities
 python-dotenv>=1.0.0
 pydantic>=2.0.0
+
+# Database
+flask-sqlalchemy>=3.1
+flask-migrate>=4.0
+psycopg2-binary>=2.9
+
+# Auth
+bcrypt>=4.0
+pyjwt>=2.8
+
+# Rate limiting
+flask-limiter>=3.5
