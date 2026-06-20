@@ -70,6 +70,7 @@ export const useCampaignStore = defineStore("campaign", {
   state: () => ({
     currentStep: Number(localStorage.getItem(STEP_KEY) || persistedState?.currentStep || 1),
     notice: null,
+    brandBriefId: sessionStorage.getItem("cs_active_brief_id") || null,
 
     project: persistedProject || persistedState?.project || null,
     simulationId: persistedProject?.simulation_id || persistedState?.simulationId || null,
@@ -283,6 +284,16 @@ export const useCampaignStore = defineStore("campaign", {
       window.setTimeout(() => {
         if (this.notice === message) this.notice = null;
       }, 4200);
+    },
+
+    selectBrief(id) {
+      this.brandBriefId = id;
+      sessionStorage.setItem("cs_active_brief_id", id);
+    },
+
+    clearBrief() {
+      this.brandBriefId = null;
+      sessionStorage.removeItem("cs_active_brief_id");
     },
 
     async uploadBrandBrief(file, simulationRequirement) {
