@@ -54,7 +54,11 @@ def create_app(config_class=Config):
              "https://campaignsim-v3.aethersystems.co"
          ],
          supports_credentials=True)
-    
+
+    # Wire flask-limiter to the app (limiter instance lives in auth.py)
+    from .api.auth import limiter as auth_limiter
+    auth_limiter.init_app(app)
+
     from .services.simulation_runner import SimulationRunner
     SimulationRunner.register_cleanup()
     if should_log_startup:
@@ -78,6 +82,9 @@ def create_app(config_class=Config):
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(evaluation_bp, url_prefix='/api/evaluation')
+
+    from .api import auth_bp
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     
     @app.route('/health')
     @app.route('/api/health')
