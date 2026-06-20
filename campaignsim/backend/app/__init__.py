@@ -8,20 +8,29 @@ warnings.filterwarnings("ignore", message=".*resource_tracker.*")
 
 from flask import Flask, request
 from flask_cors import CORS
+from flask_migrate import Migrate
 
 from .config import Config
+from .db import db
 from .utils.logger import setup_logger, get_logger
 
 def create_app(config_class=Config):
     """Flask"""
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
-    # JSON \uXXXX
-    # Flask >= 2.3  app.json.ensure_ascii JSON_AS_ASCII
+
+    # Database
+    db.init_app(app)
+    Migrate(app, db)
+
+    # Import models so Alembic can see them
+    from .db import models  # noqa: F401
+
+    # JSON ensure_ascii=False so non-ASCII characters are not escaped to \uXXXX
+    # Flask >= 2.3 uses app.json.ensure_ascii instead of JSON_AS_ASCII
     if hasattr(app, 'json') and hasattr(app.json, 'ensure_ascii'):
         app.json.ensure_ascii = False
-    
+
     logger = setup_logger('campaignsim')
     
     #  reloader  debug
@@ -35,7 +44,12 @@ def create_app(config_class=Config):
         logger.info("=" * 50)
     
     # CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app,
+         origins=[
+             "http://localhost:3006",
+             "https://campaignsim-v3.aethersystems.co"
+         ],
+         supports_credentials=True)
     
     from .services.simulation_runner import SimulationRunner
     SimulationRunner.register_cleanup()
