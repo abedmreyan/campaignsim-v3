@@ -26,6 +26,10 @@ def create_app(config_class=Config):
     # Import models so Alembic can see them
     from .db import models  # noqa: F401
 
+    # Storage backend — user-scoped file I/O
+    from .services.storage import LocalStorage
+    app.storage = LocalStorage(base=app.config['UPLOAD_FOLDER'])
+
     # JSON ensure_ascii=False so non-ASCII characters are not escaped to \uXXXX
     # Flask >= 2.3 uses app.json.ensure_ascii instead of JSON_AS_ASCII
     if hasattr(app, 'json') and hasattr(app.json, 'ensure_ascii'):
