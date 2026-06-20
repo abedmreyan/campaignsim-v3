@@ -4,7 +4,7 @@ Provides report generation, retrieval, and chat endpoints"""
 import os
 import traceback
 import threading
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, g
 
 from . import report_bp
 from ..config import Config
@@ -14,12 +14,14 @@ from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
+from ..utils.auth_utils import require_auth
 
 logger = get_logger('campaignsim.api.report')
 
 # ==============  ==============
 
 @report_bp.route('/generate', methods=['POST'])
+@require_auth
 def generate_report():
     """    task_id
      GET /api/report/generate/status 
@@ -184,6 +186,7 @@ def generate_report():
         }), 500
 
 @report_bp.route('/generate/status', methods=['POST'])
+@require_auth
 def get_generate_status():
     """    JSON
         {
@@ -252,6 +255,7 @@ def get_generate_status():
 # ==============  ==============
 
 @report_bp.route('/<report_id>', methods=['GET'])
+@require_auth
 def get_report(report_id: str):
     """        {
             "success": true,
@@ -288,6 +292,7 @@ def get_report(report_id: str):
         }), 500
 
 @report_bp.route('/by-simulation/<simulation_id>', methods=['GET'])
+@require_auth
 def get_report_by_simulation(simulation_id: str):
     """    ID
     
@@ -323,6 +328,7 @@ def get_report_by_simulation(simulation_id: str):
         }), 500
 
 @report_bp.route('/list', methods=['GET'])
+@require_auth
 def list_reports():
     """    Query
         simulation_id: ID
@@ -357,6 +363,7 @@ def list_reports():
         }), 500
 
 @report_bp.route('/<report_id>/download', methods=['GET'])
+@require_auth
 def download_report(report_id: str):
     """    Markdown
     
@@ -400,6 +407,7 @@ def download_report(report_id: str):
         }), 500
 
 @report_bp.route('/<report_id>', methods=['DELETE'])
+@require_auth
 def delete_report(report_id: str):
     """..."""
     try:
@@ -427,6 +435,7 @@ def delete_report(report_id: str):
 # ============== Report Agent ==============
 
 @report_bp.route('/chat', methods=['POST'])
+@require_auth
 def chat_with_report_agent():
     """    Report Agent
     
@@ -519,6 +528,7 @@ def chat_with_report_agent():
 # ==============  ==============
 
 @report_bp.route('/<report_id>/progress', methods=['GET'])
+@require_auth
 def get_report_progress(report_id: str):
     """        {
             "success": true,
@@ -554,6 +564,7 @@ def get_report_progress(report_id: str):
         }), 500
 
 @report_bp.route('/<report_id>/sections', methods=['GET'])
+@require_auth
 def get_report_sections(report_id: str):
     """        {
             "success": true,
@@ -596,6 +607,7 @@ def get_report_sections(report_id: str):
         }), 500
 
 @report_bp.route('/<report_id>/section/<int:section_index>', methods=['GET'])
+@require_auth
 def get_single_section(report_id: str, section_index: int):
     """        {
             "success": true,
@@ -636,6 +648,7 @@ def get_single_section(report_id: str, section_index: int):
 # ==============  ==============
 
 @report_bp.route('/check/<simulation_id>', methods=['GET'])
+@require_auth
 def check_report_status(simulation_id: str):
     """    Interview
     
@@ -681,6 +694,7 @@ def check_report_status(simulation_id: str):
 # ============== Agent  ==============
 
 @report_bp.route('/<report_id>/agent-log', methods=['GET'])
+@require_auth
 def get_agent_log(report_id: str):
     """     Report Agent 
     
@@ -735,6 +749,7 @@ def get_agent_log(report_id: str):
         }), 500
 
 @report_bp.route('/<report_id>/agent-log/stream', methods=['GET'])
+@require_auth
 def stream_agent_log(report_id: str):
     """     Agent 
     
@@ -767,6 +782,7 @@ def stream_agent_log(report_id: str):
 # ==============  ==============
 
 @report_bp.route('/<report_id>/console-log', methods=['GET'])
+@require_auth
 def get_console_log(report_id: str):
     """     Report Agent 
     
@@ -808,6 +824,7 @@ def get_console_log(report_id: str):
         }), 500
 
 @report_bp.route('/<report_id>/console-log/stream', methods=['GET'])
+@require_auth
 def stream_console_log(report_id: str):
     """        {
             "success": true,
@@ -838,6 +855,7 @@ def stream_console_log(report_id: str):
 # ============== ==============
 
 @report_bp.route('/tools/search', methods=['POST'])
+@require_auth
 def search_graph_tool():
     """    JSON
         {
@@ -881,6 +899,7 @@ def search_graph_tool():
         }), 500
 
 @report_bp.route('/tools/statistics', methods=['POST'])
+@require_auth
 def get_graph_statistics_tool():
     """    JSON
         {

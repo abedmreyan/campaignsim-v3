@@ -43,7 +43,8 @@ class Project:
     chunk_overlap: int = 50
     
     error: Optional[str] = None
-    
+    user_id: Optional[str] = None   # owner — set on creation, used for access checks
+
     def to_dict(self) -> Dict[str, Any]:
         """..."""
         return {
@@ -61,7 +62,8 @@ class Project:
             "simulation_requirement": self.simulation_requirement,
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
-            "error": self.error
+            "error": self.error,
+            "user_id": self.user_id
         }
     
     @classmethod
@@ -86,7 +88,8 @@ class Project:
             simulation_requirement=data.get('simulation_requirement'),
             chunk_size=data.get('chunk_size', 500),
             chunk_overlap=data.get('chunk_overlap', 50),
-            error=data.get('error')
+            error=data.get('error'),
+            user_id=data.get('user_id')
         )
 
 class ProjectManager:

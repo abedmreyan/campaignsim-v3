@@ -4,10 +4,11 @@ import json
 import os
 from datetime import datetime
 
-from flask import jsonify, request
+from flask import jsonify, request, g
 
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.auth_utils import require_auth
 from . import evaluation_bp
 
 logger = get_logger('campaignsim.api.evaluation')
@@ -37,6 +38,7 @@ def _save_study(study: dict) -> None:
 
 
 @evaluation_bp.route('/record_prediction', methods=['POST'])
+@require_auth
 def record_expert_prediction():
     """
     Record a human expert's variant ranking prediction.
@@ -91,6 +93,7 @@ def record_expert_prediction():
 
 
 @evaluation_bp.route('/compare_results/<study_id>', methods=['GET'])
+@require_auth
 def compare_study_results(study_id: str):
     """
     Compare human expert predictions against simulation rankings.

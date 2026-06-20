@@ -4,7 +4,7 @@ Step2: Zep entity read/filter, OASIS simulation prep and run (fully automated)""
 import json
 import os
 import traceback
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, g
 
 from . import simulation_bp
 from ..config import Config
@@ -15,6 +15,7 @@ from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
 from ..models.project import ProjectManager
+from ..utils.auth_utils import require_auth
 
 logger = get_logger('campaignsim.api.simulation')
 
@@ -38,6 +39,7 @@ def optimize_interview_prompt(prompt: str) -> str:
 # ==============  ==============
 
 @simulation_bp.route('/entities/<graph_id>', methods=['GET'])
+@require_auth
 def get_graph_entities(graph_id: str):
     """    LabelsEntity
     
@@ -78,6 +80,7 @@ def get_graph_entities(graph_id: str):
         }), 500
 
 @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
+@require_auth
 def get_entity_detail(graph_id: str, entity_uuid: str):
     """..."""
     try:
@@ -110,6 +113,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         }), 500
 
 @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
+@require_auth
 def get_entities_by_type(graph_id: str, entity_type: str):
     """..."""
     try:
@@ -148,6 +152,7 @@ def get_entities_by_type(graph_id: str, entity_type: str):
 # ==============  ==============
 
 @simulation_bp.route('/create', methods=['POST'])
+@require_auth
 def create_simulation():
     """    max_roundsLLM
     
@@ -325,6 +330,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         return False, {"reason": f": {str(e)}"}
 
 @simulation_bp.route('/prepare', methods=['POST'])
+@require_auth
 def prepare_simulation():
     """    LLM
     
@@ -580,6 +586,7 @@ def prepare_simulation():
         }), 500
 
 @simulation_bp.route('/prepare/status', methods=['POST'])
+@require_auth
 def get_prepare_status():
     """    1. task_id
     2. simulation_id
@@ -686,6 +693,7 @@ def get_prepare_status():
         }), 500
 
 @simulation_bp.route('/<simulation_id>', methods=['GET'])
+@require_auth
 def get_simulation(simulation_id: str):
     """..."""
     try:
@@ -717,6 +725,7 @@ def get_simulation(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/list', methods=['GET'])
+@require_auth
 def list_simulations():
     """    Query
         project_id: ID"""
@@ -796,6 +805,7 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
         return None
 
 @simulation_bp.route('/history', methods=['GET'])
+@require_auth
 def get_simulation_history():
     """    Query
         limit: 20
@@ -899,6 +909,7 @@ def get_simulation_history():
         }), 500
 
 @simulation_bp.route('/<simulation_id>/profiles', methods=['GET'])
+@require_auth
 def get_simulation_profiles(simulation_id: str):
     """    Agent Profile
     
@@ -934,6 +945,7 @@ def get_simulation_profiles(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/profiles/realtime', methods=['GET'])
+@require_auth
 def get_simulation_profiles_realtime(simulation_id: str):
     """    Agent Profile
     
@@ -1036,6 +1048,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/config/realtime', methods=['GET'])
+@require_auth
 def get_simulation_config_realtime(simulation_id: str):
     """     /config 
     -  SimulationManager
@@ -1143,6 +1156,7 @@ def get_simulation_config_realtime(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/config', methods=['GET'])
+@require_auth
 def get_simulation_config(simulation_id: str):
     """    LLM
     
@@ -1175,6 +1189,7 @@ def get_simulation_config(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/config/download', methods=['GET'])
+@require_auth
 def download_simulation_config(simulation_id: str):
     """..."""
     try:
@@ -1203,6 +1218,7 @@ def download_simulation_config(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/script/<script_name>/download', methods=['GET'])
+@require_auth
 def download_simulation_script(script_name: str):
     """     backend/scripts/
     
@@ -1253,6 +1269,7 @@ def download_simulation_script(script_name: str):
 # ============== Profile ==============
 
 @simulation_bp.route('/generate-profiles', methods=['POST'])
+@require_auth
 def generate_profiles():
     """Kick off async OASIS profile generation.
 
@@ -1422,6 +1439,7 @@ def generate_profiles():
 
 
 @simulation_bp.route('/generate-profiles/status', methods=['GET'])
+@require_auth
 def get_generate_profiles_status():
     """Poll profile generation task status.
 
@@ -1443,6 +1461,7 @@ def get_generate_profiles_status():
 # ==============  ==============
 
 @simulation_bp.route('/start', methods=['POST'])
+@require_auth
 def start_simulation():
     """    JSON
         {
@@ -1618,6 +1637,7 @@ def start_simulation():
         }), 500
 
 @simulation_bp.route('/stop', methods=['POST'])
+@require_auth
 def stop_simulation():
     """    JSON
         {
@@ -1672,6 +1692,7 @@ def stop_simulation():
 # ==============  ==============
 
 @simulation_bp.route('/<simulation_id>/run-status', methods=['GET'])
+@require_auth
 def get_run_status(simulation_id: str):
     """        {
             "success": true,
@@ -1724,6 +1745,7 @@ def get_run_status(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/run-status/detail', methods=['GET'])
+@require_auth
 def get_run_status_detail(simulation_id: str):
     """    Query
         platform: twitter/reddit
@@ -1814,6 +1836,7 @@ def get_run_status_detail(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/actions', methods=['GET'])
+@require_auth
 def get_simulation_actions(simulation_id: str):
     """    Agent
     
@@ -1864,6 +1887,7 @@ def get_simulation_actions(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/timeline', methods=['GET'])
+@require_auth
 def get_simulation_timeline(simulation_id: str):
     """    Query
         start_round: 0
@@ -1895,6 +1919,7 @@ def get_simulation_timeline(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/agent-stats', methods=['GET'])
+@require_auth
 def get_agent_stats(simulation_id: str):
     """    Agent
     
@@ -1921,6 +1946,7 @@ def get_agent_stats(simulation_id: str):
 # ==============  ==============
 
 @simulation_bp.route('/<simulation_id>/posts', methods=['GET'])
+@require_auth
 def get_simulation_posts(simulation_id: str):
     """    Query
         platform: twitter/reddit
@@ -1994,6 +2020,7 @@ def get_simulation_posts(simulation_id: str):
         }), 500
 
 @simulation_bp.route('/<simulation_id>/comments', methods=['GET'])
+@require_auth
 def get_simulation_comments(simulation_id: str):
     """    Reddit
     
@@ -2068,6 +2095,7 @@ def get_simulation_comments(simulation_id: str):
 # ============== Interview  ==============
 
 @simulation_bp.route('/interview', methods=['POST'])
+@require_auth
 def interview_agent():
     """    Agent
 
@@ -2191,6 +2219,7 @@ def interview_agent():
         }), 500
 
 @simulation_bp.route('/interview/batch', methods=['POST'])
+@require_auth
 def interview_agents_batch():
     """    Agent
 
@@ -2321,6 +2350,7 @@ def interview_agents_batch():
         }), 500
 
 @simulation_bp.route('/interview/all', methods=['POST'])
+@require_auth
 def interview_all_agents():
     """     - Agent
 
@@ -2417,6 +2447,7 @@ def interview_all_agents():
         }), 500
 
 @simulation_bp.route('/interview/history', methods=['POST'])
+@require_auth
 def get_interview_history():
     """    Interview
 
@@ -2485,6 +2516,7 @@ def get_interview_history():
         }), 500
 
 @simulation_bp.route('/env-status', methods=['POST'])
+@require_auth
 def get_env_status():
     """    Interview
 
@@ -2543,6 +2575,7 @@ def get_env_status():
         }), 500
 
 @simulation_bp.route('/close-env', methods=['POST'])
+@require_auth
 def close_simulation_env():
     """     /stop /stop 
     
@@ -2606,6 +2639,7 @@ def close_simulation_env():
 # ============== Phase 2 — Channel Variant Simulation ==============
 
 @simulation_bp.route('/launch_variant', methods=['POST'])
+@require_auth
 def launch_variant():
     """Launch a single channel variant simulation.
 
@@ -2736,6 +2770,7 @@ def launch_variant():
 
 
 @simulation_bp.route('/variant_status/<variant_sim_id>', methods=['GET'])
+@require_auth
 def variant_status(variant_sim_id: str):
     """Poll status of a running variant simulation.
 
@@ -2825,6 +2860,7 @@ def _load_campaign(campaign_id: str):
 
 
 @simulation_bp.route('/ab_test', methods=['POST'])
+@require_auth
 def start_ab_test():
     """Start a multi-variant A/B simulation.
 
@@ -2951,6 +2987,7 @@ def start_ab_test():
 
 
 @simulation_bp.route('/ab_status/<campaign_id>', methods=['GET'])
+@require_auth
 def ab_status(campaign_id: str):
     """Poll the status of all variants in a campaign.
 
@@ -2999,6 +3036,7 @@ def ab_status(campaign_id: str):
 
 
 @simulation_bp.route('/assign_segments', methods=['POST'])
+@require_auth
 def assign_segments():
     """Assign generated personas to named audience segments.
 
@@ -3122,6 +3160,7 @@ def assign_segments():
 # ============== Phase 4 — Recommendation Engine ==============
 
 @simulation_bp.route('/campaign_recommendations', methods=['POST'])
+@require_auth
 def generate_campaign_recommendations():
     """
     Score all simulation variants and generate a recommendation report.
@@ -3223,6 +3262,7 @@ def generate_campaign_recommendations():
 
 
 @simulation_bp.route('/campaign_report/<campaign_id>', methods=['GET'])
+@require_auth
 def get_campaign_report(campaign_id: str):
     """
     Retrieve the generated campaign recommendation report.
@@ -3270,6 +3310,7 @@ def get_campaign_report(campaign_id: str):
 
 
 @simulation_bp.route('/campaigns', methods=['GET'])
+@require_auth
 def list_campaigns():
     """List all past and active A/B campaigns for the history dashboard.
 

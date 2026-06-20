@@ -4,7 +4,7 @@ Uses project context mechanism with server-side persistent state"""
 import os
 import traceback
 import threading
-from flask import request, jsonify
+from flask import request, jsonify, g
 
 from . import graph_bp
 from ..config import Config
@@ -16,6 +16,7 @@ from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
 from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
+from ..utils.auth_utils import require_auth
 
 logger = get_logger('campaignsim.api')
 
@@ -29,15 +30,19 @@ def allowed_file(filename: str) -> bool:
 # ==============  ==============
 
 @graph_bp.route('/project/<project_id>', methods=['GET'])
+@require_auth
 def get_project(project_id: str):
     """..."""
     project = ProjectManager.get_project(project_id)
-    
+
     if not project:
         return jsonify({
             "success": False,
             "error": t('api.projectNotFound', id=project_id)
         }), 404
+
+    if project.user_id and project.user_id != g.current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
 
     return jsonify({
         "success": True,
@@ -45,43 +50,54 @@ def get_project(project_id: str):
     })
 
 @graph_bp.route('/project/list', methods=['GET'])
+@require_auth
 def list_projects():
     """..."""
     limit = request.args.get('limit', 50, type=int)
-    projects = ProjectManager.list_projects(limit=limit)
-    
+    all_projects = ProjectManager.list_projects(limit=limit)
+    # Return only projects owned by current user (or legacy projects with no owner)
+    owned = [p for p in all_projects if p.user_id in (None, g.current_user.id)]
+
     return jsonify({
         "success": True,
-        "data": [p.to_dict() for p in projects],
-        "count": len(projects)
+        "data": [p.to_dict() for p in owned],
+        "count": len(owned)
     })
 
 @graph_bp.route('/project/<project_id>', methods=['DELETE'])
+@require_auth
 def delete_project(project_id: str):
     """..."""
-    success = ProjectManager.delete_project(project_id)
-    
-    if not success:
+    project = ProjectManager.get_project(project_id)
+    if not project:
         return jsonify({
             "success": False,
             "error": t('api.projectDeleteFailed', id=project_id)
         }), 404
 
+    if project.user_id and project.user_id != g.current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    ProjectManager.delete_project(project_id)
     return jsonify({
         "success": True,
         "message": t('api.projectDeleted', id=project_id)
     })
 
 @graph_bp.route('/project/<project_id>/reset', methods=['POST'])
+@require_auth
 def reset_project(project_id: str):
     """..."""
     project = ProjectManager.get_project(project_id)
-    
+
     if not project:
         return jsonify({
             "success": False,
             "error": t('api.projectNotFound', id=project_id)
         }), 404
+
+    if project.user_id and project.user_id != g.current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
 
     if project.ontology:
         project.status = ProjectStatus.ONTOLOGY_GENERATED
@@ -102,6 +118,7 @@ def reset_project(project_id: str):
 # ============== 1 ==============
 
 @graph_bp.route('/ontology/generate', methods=['POST'])
+@require_auth
 def generate_ontology():
     """    1
     
@@ -150,6 +167,7 @@ def generate_ontology():
         
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
+        project.user_id = g.current_user.id
         logger.info(f"Created project: {project.project_id}")
         
         document_texts = []
@@ -226,6 +244,7 @@ def generate_ontology():
 # ============== 2 ==============
 
 @graph_bp.route('/build', methods=['POST'])
+@require_auth
 def build_graph():
     """    2project_id
     
@@ -274,6 +293,9 @@ def build_graph():
                 "success": False,
                 "error": t('api.projectNotFound', id=project_id)
             }), 404
+
+        if project.user_id and project.user_id != g.current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
 
         force = data.get('force', False)
         
@@ -475,6 +497,7 @@ def build_graph():
 # ==============  ==============
 
 @graph_bp.route('/task/<task_id>', methods=['GET'])
+@require_auth
 def get_task(task_id: str):
     """..."""
     task = TaskManager().get_task(task_id)
@@ -491,6 +514,7 @@ def get_task(task_id: str):
     })
 
 @graph_bp.route('/tasks', methods=['GET'])
+@require_auth
 def list_tasks():
     """..."""
     tasks = TaskManager().list_tasks()
@@ -504,6 +528,7 @@ def list_tasks():
 # ==============  ==============
 
 @graph_bp.route('/data/<graph_id>', methods=['GET'])
+@require_auth
 def get_graph_data(graph_id: str):
     """..."""
     try:
@@ -529,6 +554,7 @@ def get_graph_data(graph_id: str):
         }), 500
 
 @graph_bp.route('/delete/<graph_id>', methods=['DELETE'])
+@require_auth
 def delete_graph(graph_id: str):
     """    Zep"""
     try:
