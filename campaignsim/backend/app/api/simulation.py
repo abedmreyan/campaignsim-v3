@@ -4,7 +4,7 @@ Step2: Zep entity read/filter, OASIS simulation prep and run (fully automated)""
 import json
 import os
 import traceback
-from flask import request, jsonify, send_file, g
+from flask import request, jsonify, send_file, g, current_app
 
 from . import simulation_bp
 from ..config import Config
@@ -16,6 +16,9 @@ from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
 from ..models.project import ProjectManager
 from ..utils.auth_utils import require_auth
+from ..db import db
+from ..db import db as _db
+from ..db.models import Persona, BrandBrief
 
 logger = get_logger('campaignsim.api.simulation')
 
@@ -1298,6 +1301,7 @@ def generate_profiles():
                 "error": t('api.requireGraphId')
             }), 400
 
+        brief_id = data.get('brief_id')          # optional; if provided, personas saved to DB
         simulation_id = data.get('simulation_id')
 
         # Default to only individual persona entity types so brands/channels are excluded
@@ -1405,6 +1409,24 @@ def generate_profiles():
                     except Exception as save_err:
                         logger.warning(f"Could not save profiles to disk: {save_err}")
 
+                # Save profiles to DB if a brand_brief_id was provided
+                if brief_id and g_current_user_id:
+                    try:
+                        with _app.app_context():
+                            for prof in profiles_data:
+                                p = Persona(
+                                    user_id=g_current_user_id,
+                                    brand_brief_id=brief_id,
+                                    external_id=prof.get("user_id"),
+                                    segment=prof.get("segment"),
+                                    data=prof,
+                                )
+                                _db.session.add(p)
+                            _db.session.commit()
+                        logger.info(f"Saved {len(profiles_data)} personas to DB for brief {brief_id}")
+                    except Exception as db_err:
+                        logger.warning(f"Could not save personas to DB: {db_err}")
+
                 task_manager.complete_task(task_id, result={
                     "platform": platform,
                     "entity_types": list(filtered.entity_types),
@@ -1415,6 +1437,11 @@ def generate_profiles():
             except Exception as e:
                 logger.error(f"Profile generation failed: {str(e)}")
                 task_manager.fail_task(task_id, str(e))
+
+        _app = current_app._get_current_object()  # capture for use inside thread
+        from flask import g as _g
+        g_current_user_id = getattr(_g, 'current_user', None)
+        g_current_user_id = g_current_user_id.id if g_current_user_id else None
 
         thread = threading.Thread(target=run_generation, daemon=True)
         thread.start()
@@ -3378,4 +3405,67 @@ def list_campaigns():
     except Exception as e:
         logger.error(f"list_campaigns failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@simulation_bp.route('/personas', methods=['GET'])
+@require_auth
+def list_personas():
+    """List personas for the current user scoped to a brand brief."""
+    brief_id = request.args.get('brief_id')
+    if not brief_id:
+        return jsonify({"error": "brief_id query param required"}), 400
+
+    # Verify brief belongs to current user
+    brief = BrandBrief.query.filter_by(id=brief_id, user_id=g.current_user.id).first()
+    if not brief:
+        return jsonify({"error": "Brief not found"}), 404
+
+    personas = Persona.query.filter_by(
+        user_id=g.current_user.id,
+        brand_brief_id=brief_id,
+    ).order_by(Persona.created_at).all()
+
+    return jsonify({
+        "items": [
+            {
+                "id": p.id,
+                "external_id": p.external_id,
+                "segment": p.segment,
+                **p.data,
+            }
+            for p in personas
+        ]
+    })
+
+
+@simulation_bp.route('/persona/<persona_id>', methods=['DELETE'])
+@require_auth
+def delete_persona(persona_id: str):
+    """Delete a single persona row owned by the current user."""
+    persona = Persona.query.filter_by(id=persona_id, user_id=g.current_user.id).first()
+    if not persona:
+        return jsonify({"error": "Not found"}), 404
+    db.session.delete(persona)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@simulation_bp.route('/personas/clear', methods=['POST'])
+@require_auth
+def clear_personas():
+    """Delete all personas for a brief owned by the current user."""
+    brief_id = request.args.get('brief_id')
+    if not brief_id:
+        return jsonify({"error": "brief_id query param required"}), 400
+
+    brief = BrandBrief.query.filter_by(id=brief_id, user_id=g.current_user.id).first()
+    if not brief:
+        return jsonify({"error": "Brief not found"}), 404
+
+    Persona.query.filter_by(
+        user_id=g.current_user.id,
+        brand_brief_id=brief_id,
+    ).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
 
