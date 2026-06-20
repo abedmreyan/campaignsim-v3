@@ -34,11 +34,12 @@
 
 <script setup>
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/authStore";
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const email = ref("");
 const password = ref("");
 const displayName = ref("");
@@ -46,7 +47,8 @@ const displayName = ref("");
 async function submit() {
   try {
     await auth.signup(email.value, password.value, displayName.value);
-    router.push("/briefs");
+    const redirect = route.query.redirect || "/process";
+    router.push(redirect);
   } catch {
     // error is set on auth.error
   }

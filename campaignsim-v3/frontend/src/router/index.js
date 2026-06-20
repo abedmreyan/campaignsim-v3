@@ -64,12 +64,12 @@ router.beforeEach(async (to) => {
   // Workflow routes additionally require a selected brand brief
   const store = useCampaignStore();
   const workflowRoutes = new Set([
-    "process", "graph", "simulation-run", "report", "interaction",
+    "graph", "simulation-run", "report", "interaction",
   ]);
 
   if (workflowRoutes.has(to.name) && !store.brandBriefId) {
     store.setNotice("Select a brand brief before entering the workflow.");
-    return "/briefs";
+    return { name: "brand-brief" };
   }
 
   // Legacy guards from original router
