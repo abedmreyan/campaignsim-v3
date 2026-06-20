@@ -9,6 +9,7 @@ import os
 import tempfile
 
 from flask import current_app, g, jsonify, request
+from werkzeug.utils import secure_filename
 
 from app.api import briefs_bp
 from app.db import db
@@ -121,7 +122,8 @@ def upload_brief_file(brief_id: str):
     text = FileParser.extract_text(content_bytes, file.filename)
 
     storage = current_app.storage
-    key = f"briefs/{brief.id}/{file.filename}"
+    safe_name = secure_filename(file.filename) or "upload"
+    key = f"briefs/{brief.id}/{safe_name}"
     storage.save_file(g.current_user.id, key, content_bytes)
 
     brief.file_path = key

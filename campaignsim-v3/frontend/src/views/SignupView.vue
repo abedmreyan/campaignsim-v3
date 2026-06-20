@@ -47,7 +47,10 @@ const displayName = ref("");
 async function submit() {
   try {
     await auth.signup(email.value, password.value, displayName.value);
-    const redirect = route.query.redirect || "/process";
+    const rawRedirect = route.query.redirect;
+    const redirect = (rawRedirect && typeof rawRedirect === "string" && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//"))
+      ? rawRedirect
+      : "/process";
     router.push(redirect);
   } catch {
     // error is set on auth.error
