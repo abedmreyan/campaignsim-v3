@@ -85,6 +85,9 @@ def create_app(config_class=Config):
 
     from .api import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+
+    from .api import briefs_bp
+    app.register_blueprint(briefs_bp, url_prefix='/api/briefs')
     
     @app.route('/health')
     @app.route('/api/health')

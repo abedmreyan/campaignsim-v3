@@ -16,3 +16,4 @@ from . import auth         # noqa: E402, F401
 
 # Re-export auth_bp (declared in auth.py) so app factory can import it from here
 from .auth import auth_bp  # noqa: F401
+from . import briefs  # noqa: E402, F401
