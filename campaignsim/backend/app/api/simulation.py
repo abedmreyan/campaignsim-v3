@@ -17,7 +17,6 @@ from ..utils.locale import t, get_locale, set_locale
 from ..models.project import ProjectManager
 from ..utils.auth_utils import require_auth
 from ..db import db
-from ..db import db as _db
 from ..db.models import Persona, BrandBrief
 
 logger = get_logger('campaignsim.api.simulation')
@@ -1421,8 +1420,8 @@ def generate_profiles():
                                     segment=prof.get("segment"),
                                     data=prof,
                                 )
-                                _db.session.add(p)
-                            _db.session.commit()
+                                db.session.add(p)
+                            db.session.commit()
                         logger.info(f"Saved {len(profiles_data)} personas to DB for brief {brief_id}")
                     except Exception as db_err:
                         logger.warning(f"Could not save personas to DB: {db_err}")
