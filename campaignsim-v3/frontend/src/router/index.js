@@ -47,10 +47,7 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-router.beforeEach(async (to) => {
-  // Public routes need no auth check
-  if (PUBLIC_ROUTES.has(to.name)) return true;
-
+router.beforeEach(async (to, from) => {
   const { useAuthStore } = await import("@/stores/authStore");
   const auth = useAuthStore();
 
@@ -58,6 +55,15 @@ router.beforeEach(async (to) => {
   if (!auth.user) {
     await auth.fetchMe();
   }
+
+  // On initial app load (no prior route), redirect authenticated users to their dashboard.
+  // When explicitly navigating to "/" (e.g. clicking the logo), let them reach the landing page.
+  if (to.name === "home" && auth.user && from.name === null) {
+    return { name: "brand-brief" };
+  }
+
+  // Public routes (login, signup, home for unauthenticated) — no further checks
+  if (PUBLIC_ROUTES.has(to.name)) return true;
 
   if (!auth.user) return "/login";
 

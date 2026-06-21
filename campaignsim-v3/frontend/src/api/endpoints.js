@@ -16,7 +16,7 @@ export const endpoints = {
   simulationPrepare: "/api/simulation/prepare",
   simulationPrepareStatus: "/api/simulation/prepare/status",
   simulationList: "/api/simulation/list",
-  simulationHistory: "/api/simulation/history",
+  simulationHistory: "/api/simulation/campaigns",
   simulationById: (simulationId) => `/api/simulation/${simulationId}`,
 
   generateProfiles: "/api/simulation/generate-profiles",

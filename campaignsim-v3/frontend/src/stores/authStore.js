@@ -17,7 +17,7 @@ export const useAuthStore = defineStore("auth", {
       this.loading = true;
       this.error = null;
       try {
-        const resp = await apiClient.get("/api/auth/me");
+        const resp = await apiClient.get("/api/auth/me", { _skipRefresh: true });
         this.user = resp.data;
       } catch {
         this.user = null;
@@ -30,7 +30,7 @@ export const useAuthStore = defineStore("auth", {
       this.loading = true;
       this.error = null;
       try {
-        const resp = await apiClient.post("/api/auth/login", { email, password });
+        const resp = await apiClient.post("/api/auth/login", { email, password }, { _skipRefresh: true });
         this.user = resp.data.user;
       } catch (err) {
         this.error = err.message || "Login failed";
@@ -48,7 +48,7 @@ export const useAuthStore = defineStore("auth", {
           email,
           password,
           display_name: displayName,
-        });
+        }, { _skipRefresh: true });
         this.user = resp.data.user;
       } catch (err) {
         this.error = err.message || "Signup failed";

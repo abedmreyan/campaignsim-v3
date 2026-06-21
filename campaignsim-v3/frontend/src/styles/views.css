@@ -483,16 +483,12 @@
 }
 
 .mission-control__footer {
-  position: sticky;
-  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--glass-border);
-  background: linear-gradient(180deg, transparent, var(--color-bg) 35%);
-  backdrop-filter: blur(8px);
 }
 
 .progress-card.is-running {
@@ -1427,9 +1423,6 @@
   }
 
   .mission-control__footer {
-    position: static;
-    background: transparent;
-    backdrop-filter: none;
     border-top: 1px solid var(--glass-border);
   }
 

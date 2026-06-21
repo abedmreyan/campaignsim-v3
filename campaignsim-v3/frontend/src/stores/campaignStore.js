@@ -569,9 +569,13 @@ export const useCampaignStore = defineStore("campaign", {
       this.persist();
     },
 
-    async startAbTest() {
-      if (!this.canStartSimulation) {
-        throw new Error("Create 2 to 3 variants before starting the A/B simulation.");
+    async startAbTest(selectedVariantIds = null) {
+      const variantsToRun = selectedVariantIds
+        ? this.variants.filter((v) => selectedVariantIds.includes(v.variant_id))
+        : this.variants;
+
+      if (variantsToRun.length < 2 || variantsToRun.length > 3) {
+        throw new Error("Select 2–3 variants before starting the A/B simulation.");
       }
 
       this.simulationRun.loading = true;
@@ -581,7 +585,7 @@ export const useCampaignStore = defineStore("campaign", {
           simulation_id: this.simulationId,
           brand_name: this.project?.project_name || "",
           campaign_goal: this.project?.simulation_requirement || "",
-          variants: this.variants.map(toApiVariant),
+          variants: variantsToRun.map(toApiVariant),
         });
         // Save campaign_id — required for ab_status polling and report generation
         this.campaignId = data.campaign_id || null;
@@ -615,23 +619,17 @@ export const useCampaignStore = defineStore("campaign", {
           // Clear any previous transient error on success
           if (this.simulationRun.error) this.simulationRun.error = null;
           const allDone = data.all_done;
-          const MAX_ROUNDS = 10;
-          // Use persona count to estimate round progress from actions_count.
-          // Each simulation round processes all personas, so:
-          //   estimated_round  = floor(actions_count / persona_count)
-          //   variant_progress = actions_count / (persona_count * MAX_ROUNDS)
-          const personaCount = Math.max(1, this.personas.items.length || 30);
-          const expectedActionsPerVariant = personaCount * MAX_ROUNDS;
 
           this.simulationRun.variants = (data.variants || []).map((v) => {
+            const maxRounds = v.max_rounds || 10;
             if (v.runner_status === "completed") {
               return {
                 variant_id: v.variant_id,
                 variant_name: v.variant_name,
                 status: "completed",
                 progress: 100,
-                current_round: MAX_ROUNDS,
-                max_rounds: MAX_ROUNDS,
+                current_round: maxRounds,
+                max_rounds: maxRounds,
               };
             }
             if (v.runner_status === "failed") {
@@ -641,23 +639,21 @@ export const useCampaignStore = defineStore("campaign", {
                 status: "failed",
                 progress: 0,
                 current_round: null,
-                max_rounds: MAX_ROUNDS,
+                max_rounds: maxRounds,
               };
             }
-            const actions = v.actions_count || 0;
-            const estimatedPct = actions > 0
-              ? Math.min(95, Math.round((actions / expectedActionsPerVariant) * 100))
-              : 0;
-            const estimatedRound = actions > 0
-              ? Math.min(MAX_ROUNDS - 1, Math.floor(actions / personaCount))
+            // Use round_end event counts from backend (v.current_round / v.max_rounds)
+            const currentRound = v.current_round || 0;
+            const progress = currentRound > 0
+              ? Math.min(95, Math.round((currentRound / maxRounds) * 100))
               : 0;
             return {
               variant_id: v.variant_id,
               variant_name: v.variant_name,
               status: "running",
-              progress: estimatedPct,
-              current_round: estimatedRound,
-              max_rounds: MAX_ROUNDS,
+              progress,
+              current_round: currentRound,
+              max_rounds: maxRounds,
             };
           });
 
@@ -832,6 +828,23 @@ export const useCampaignStore = defineStore("campaign", {
       }
     },
 
+    async loadCampaignReport(campaignId = this.campaignId) {
+      this.report.loading = true;
+      this.report.error = null;
+      try {
+        const data = await getCampaignReportApi(campaignId);
+        this.report.data = this._normalizeCampaignReport(data);
+        this.simulationRun.status = "completed";
+        this.persist();
+        return this.report.data;
+      } catch (error) {
+        this.report.error = normalizeError(error, "Could not load campaign report.");
+        throw error;
+      } finally {
+        this.report.loading = false;
+      }
+    },
+
     async interviewPersona(personaId, question) {
       if (!this.report.data || this.personas.items.length === 0) {
         throw new Error("Generate a report and personas before interviewing personas.");
@@ -865,7 +878,34 @@ export const useCampaignStore = defineStore("campaign", {
       this.history.error = null;
       try {
         const data = await getHistory();
-        this.history.items = data.items || data.history || [];
+        // getHistory() returns the unwrapped payload (array or object depending on St())
+        // Handle both: raw array OR object with .data/.items/.history
+        const raw = Array.isArray(data) ? data : (data?.data || data?.items || data?.history || []);
+        this.history.items = raw.map((c) => {
+          // Find the best completed variant (for "top variant" column)
+          const variants = c.variants || [];
+          const completed = variants.filter((v) => v.status === "completed");
+          const topVariant = completed[0] || variants[0];
+          return {
+            // IDs
+            simulation_id: c.simulation_id || c.campaign_id,
+            campaign_id:   c.campaign_id,
+            // Display
+            project_name:  c.brand_name || c.campaign_goal || "Campaign",
+            status:        c.overall_status || c.status || "pending",
+            variants_count: c.variant_count ?? variants.length,
+            top_variant_name: topVariant?.variant_name || null,
+            // Dates
+            created_at: c.created_at,
+            updated_at: c.updated_at || c.created_at,
+            // Navigation
+            has_report: c.has_report || false,
+            report_id:  c.report_id || null,
+            graph_id:   c.graph_id || null,
+            // Raw
+            _raw: c,
+          };
+        });
         this.persist();
         return data;
       } catch (error) {
