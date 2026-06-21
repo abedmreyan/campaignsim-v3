@@ -70,21 +70,21 @@ sudo apt-get install -y -q \
   openssl
 
 # =============================================================================
-# PHASE 2 — Python 3.12
+# PHASE 2 — Python 3.11
 # =============================================================================
-log "Ensuring Python 3.12 is installed..."
+log "Ensuring Python 3.11 is installed..."
+# camel-oasis==0.2.5 requires Python >=3.10,<3.12 — must use 3.11
 
-# Ubuntu 24.04 ships with 3.12; add deadsnakes PPA as fallback for older systems
-if ! python3.12 --version &>/dev/null; then
-  warn "Python 3.12 not found — installing via deadsnakes PPA..."
+if ! python3.11 --version &>/dev/null; then
+  warn "Python 3.11 not found — installing via deadsnakes PPA..."
   sudo add-apt-repository ppa:deadsnakes/ppa -y
   sudo apt-get update -q
-  sudo apt-get install -y -q python3.12 python3.12-venv python3.12-dev
+  sudo apt-get install -y -q python3.11 python3.11-venv python3.11-dev
 else
-  sudo apt-get install -y -q python3.12-venv python3.12-dev
+  sudo apt-get install -y -q python3.11-venv python3.11-dev
 fi
 
-PYTHON=$(which python3.12)
+PYTHON=$(which python3.11)
 log "Using Python: $($PYTHON --version)"
 
 # =============================================================================
@@ -153,8 +153,13 @@ EOF
 # =============================================================================
 # PHASE 8 — Python backend
 # =============================================================================
-log "Creating Python 3.12 virtual environment..."
+log "Creating Python 3.11 virtual environment..."
 cd ${APP_DIR}/campaignsim/backend
+# Remove existing venv if it was created with wrong Python version
+if [ -d ".venv" ] && ! .venv/bin/python --version 2>&1 | grep -q "3.11"; then
+  warn "Removing existing venv (wrong Python version)..."
+  rm -rf .venv
+fi
 $PYTHON -m venv .venv
 
 log "Upgrading pip..."
