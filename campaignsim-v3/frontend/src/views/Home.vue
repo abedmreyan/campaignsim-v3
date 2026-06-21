@@ -7,8 +7,7 @@
 
     <header class="home-header">
       <div class="brand">
-        <span>CS</span>
-        <strong>CampaignSim</strong>
+        <img src="/logo.png" alt="CampaignSim" class="brand__logo" />
       </div>
       <div class="home-header__actions">
         <!-- Authenticated: Go to app -->

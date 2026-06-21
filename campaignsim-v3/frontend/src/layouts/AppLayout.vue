@@ -11,8 +11,7 @@
       <!-- Brand -->
       <div class="sidebar__brand">
         <RouterLink to="/" class="sidebar__logo-link">
-          <span class="sidebar__logo-mark">CS</span>
-          <span class="sidebar__logo-text">CampaignSim</span>
+          <img src="/logo.png" alt="CampaignSim" class="sidebar__logo-img" />
         </RouterLink>
       </div>
 
@@ -51,16 +50,16 @@
           <span class="sidebar__label">Briefs</span>
         </RouterLink>
 
-        <RouterLink
-          to="/process"
+        <button
           class="sidebar__item"
           :class="{ 'sidebar__item--active': isWorkflowActive }"
+          @click="goToSimulations"
         >
           <svg class="sidebar__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z"/>
           </svg>
           <span class="sidebar__label">Simulations</span>
-        </RouterLink>
+        </button>
 
         <button
           class="sidebar__item"
@@ -291,6 +290,15 @@ const isWorkflowActive = computed(() =>
     route.path.startsWith(p)
   ) && store.currentStep !== 3
 );
+
+function goToSimulations() {
+  if (route.path.startsWith("/process")) {
+    // Already in the workflow — reset to step 1 so the click feels responsive
+    store.goToStep(1);
+  } else {
+    router.push("/process");
+  }
+}
 
 function goToVariants() {
   if (!store.brandBriefId) {

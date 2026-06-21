@@ -1,7 +1,7 @@
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <h1 class="auth-title">CampaignSim</h1>
+      <img src="/logo.png" alt="CampaignSim" class="auth-logo" />
       <p class="auth-subtitle">Sign in to your account</p>
 
       <form @submit.prevent="submit" class="auth-form">
@@ -73,6 +73,7 @@ async function submit() {
   border: 1px solid var(--color-border);
   border-radius: 1rem;
 }
+.auth-logo { height: 2.25rem; width: auto; object-fit: contain; margin-bottom: 0.5rem; display: block; }
 .auth-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
 .auth-subtitle { color: var(--color-text-muted); margin-bottom: 2rem; }
 .auth-form { display: flex; flex-direction: column; gap: 1rem; }
