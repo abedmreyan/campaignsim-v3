@@ -58,19 +58,46 @@ log "Updating system packages..."
 sudo apt-get update -y -q
 sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -q
 
-log "Installing dependencies..."
+log "Installing system dependencies..."
 sudo apt-get install -y -q \
-  git curl wget gnupg ca-certificates \
-  python3 python3-pip python3-venv python3-dev \
-  build-essential libpq-dev \
-  postgresql postgresql-contrib \
+  git curl wget gnupg ca-certificates software-properties-common \
+  build-essential pkg-config \
+  libpq-dev libffi-dev libssl-dev \
+  libmupdf-dev mupdf-tools \
+  libblas-dev liblapack-dev gfortran \
   nginx \
+  postgresql postgresql-contrib \
   openssl
 
+# =============================================================================
+# PHASE 2 — Python 3.12
+# =============================================================================
+log "Ensuring Python 3.12 is installed..."
+
+# Ubuntu 24.04 ships with 3.12; add deadsnakes PPA as fallback for older systems
+if ! python3.12 --version &>/dev/null; then
+  warn "Python 3.12 not found — installing via deadsnakes PPA..."
+  sudo add-apt-repository ppa:deadsnakes/ppa -y
+  sudo apt-get update -q
+  sudo apt-get install -y -q python3.12 python3.12-venv python3.12-dev
+else
+  sudo apt-get install -y -q python3.12-venv python3.12-dev
+fi
+
+PYTHON=$(which python3.12)
+log "Using Python: $($PYTHON --version)"
+
+# =============================================================================
+# PHASE 3 — Node.js 20
+# =============================================================================
 log "Installing Node.js 20..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - > /dev/null 2>&1
 sudo apt-get install -y -q nodejs
+log "Using Node: $(node --version), npm: $(npm --version)"
 
+# =============================================================================
+# PHASE 4 — cloudflared
+# =============================================================================
 log "Installing cloudflared..."
 curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
   | sudo gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg 2>/dev/null
@@ -79,7 +106,7 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
 sudo apt-get update -q && sudo apt-get install -y -q cloudflared
 
 # =============================================================================
-# PHASE 2 — PostgreSQL
+# PHASE 5 — PostgreSQL
 # =============================================================================
 log "Setting up PostgreSQL..."
 sudo systemctl start postgresql
@@ -91,21 +118,22 @@ sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" 2>/dev/n
   || warn "Database already exists — skipping"
 
 # =============================================================================
-# PHASE 3 — Clone repository
+# PHASE 6 — Clone repository
 # =============================================================================
 log "Cloning repository..."
 sudo mkdir -p ${APP_DIR}
 sudo chown $USER:$USER ${APP_DIR}
 
 if [ -d "${APP_DIR}/.git" ]; then
-  warn "Repo already present, pulling latest..."
+  warn "Repo already present — pulling latest..."
   cd ${APP_DIR} && git pull
 else
   git clone "https://${GITHUB_TOKEN}@github.com/${REPO}.git" ${APP_DIR}
+  cd ${APP_DIR} && git checkout deploy/stable
 fi
 
 # =============================================================================
-# PHASE 4 — Environment file
+# PHASE 7 — Environment file
 # =============================================================================
 log "Writing .env file..."
 cat > ${APP_DIR}/campaignsim/.env << EOF
@@ -123,14 +151,20 @@ JWT_REFRESH_TTL_DAYS=30
 EOF
 
 # =============================================================================
-# PHASE 5 — Python backend
+# PHASE 8 — Python backend
 # =============================================================================
-log "Setting up Python backend..."
+log "Creating Python 3.12 virtual environment..."
 cd ${APP_DIR}/campaignsim/backend
+$PYTHON -m venv .venv
 
-python3 -m venv .venv
-.venv/bin/pip install --upgrade pip -q
-.venv/bin/pip install -r requirements.txt -q
+log "Upgrading pip..."
+.venv/bin/pip install --upgrade pip setuptools wheel -q
+
+log "Installing Python dependencies (this takes 5-10 minutes due to camel-ai/oasis)..."
+.venv/bin/pip install \
+  --timeout 120 \
+  --retries 5 \
+  -r requirements.txt
 
 # Fix missing Text import in migration if not already present
 MIGRATION_FILE="${APP_DIR}/campaignsim/backend/migrations/versions/26473512e1aa_initial_schema_users_refresh_tokens_.py"
@@ -140,19 +174,20 @@ if [ -f "$MIGRATION_FILE" ] && ! grep -q "from sqlalchemy import Text" "$MIGRATI
 fi
 
 log "Running database migrations..."
-cd ${APP_DIR}/campaignsim/backend
 FLASK_APP=app .venv/bin/flask db upgrade
 
 # =============================================================================
-# PHASE 6 — Frontend build
+# PHASE 9 — Frontend build
 # =============================================================================
-log "Building frontend..."
+log "Installing frontend dependencies..."
 cd ${APP_DIR}/campaignsim-v3/frontend
 npm install --silent
+
+log "Building frontend..."
 npm run build
 
 # =============================================================================
-# PHASE 7 — Nginx
+# PHASE 10 — Nginx
 # =============================================================================
 log "Configuring Nginx..."
 sudo tee /etc/nginx/sites-available/campaignsim > /dev/null << NGINX
@@ -178,18 +213,17 @@ server {
         proxy_read_timeout 300s;
         proxy_connect_timeout 75s;
         proxy_send_timeout 300s;
+        client_max_body_size 50M;
     }
 }
 NGINX
 
 sudo ln -sf /etc/nginx/sites-available/campaignsim /etc/nginx/sites-enabled/campaignsim
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl enable nginx
-sudo systemctl restart nginx
+sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
 
 # =============================================================================
-# PHASE 8 — Flask systemd service
+# PHASE 11 — Flask systemd service
 # =============================================================================
 log "Creating Flask systemd service..."
 sudo tee /etc/systemd/system/campaignsim.service > /dev/null << SERVICE
@@ -215,7 +249,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable campaignsim
 sudo systemctl start campaignsim
 
-sleep 3
+sleep 4
 if sudo systemctl is-active --quiet campaignsim; then
   log "Flask backend is running"
 else
@@ -223,17 +257,17 @@ else
 fi
 
 # =============================================================================
-# PHASE 9 — Cloudflare Tunnel
+# PHASE 12 — Cloudflare Tunnel
 # =============================================================================
 echo ""
 echo -e "${BLUE}=================================================="
 echo "   Cloudflare Tunnel Setup"
 echo -e "==================================================${NC}"
 echo ""
-info "A browser window will open. Log in with the Cloudflare account"
-info "that manages aethersystems.co."
+info "A browser window will open for Cloudflare authentication."
+info "Log in with the account that manages aethersystems.co"
 echo ""
-read -p "Press ENTER when ready to authenticate with Cloudflare..."
+read -p "Press ENTER to open Cloudflare login..."
 
 cloudflared tunnel login
 
@@ -256,7 +290,7 @@ ingress:
   - service: http_status:404
 EOF
 
-log "Routing DNS to tunnel (adds CNAME in Cloudflare automatically)..."
+log "Creating DNS record in Cloudflare..."
 cloudflared tunnel route dns campaignsim-home ${DOMAIN}
 
 log "Installing tunnel as system service..."
@@ -297,6 +331,7 @@ echo "   Setup Complete!"
 echo -e "==================================================${NC}"
 echo ""
 echo -e "  App URL:    ${BLUE}https://${DOMAIN}${NC}"
+echo ""
 echo -e "  Flask:      $(sudo systemctl is-active campaignsim)"
 echo -e "  Nginx:      $(sudo systemctl is-active nginx)"
 echo -e "  Tunnel:     $(sudo systemctl is-active cloudflared)"
