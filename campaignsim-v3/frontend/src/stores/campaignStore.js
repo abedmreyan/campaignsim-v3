@@ -858,7 +858,7 @@ export const useCampaignStore = defineStore("campaign", {
       this.interviewMessages.push(userMessage);
       const answer = await interviewPersonaApi({
         simulation_id: this.simulationId,
-        report_id: this.reportId,
+        campaign_id: this.campaignId,
         persona_id: personaId,
         question,
       });
