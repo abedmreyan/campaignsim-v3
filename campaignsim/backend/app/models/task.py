@@ -30,7 +30,8 @@ class Task:
     error: Optional[str] = None
     metadata: Dict = field(default_factory=dict)
     progress_detail: Dict = field(default_factory=dict)
-    
+    user_id: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """..."""
         return {
@@ -45,6 +46,7 @@ class Task:
             "result": self.result,
             "error": self.error,
             "metadata": self.metadata,
+            "user_id": self.user_id,
         }
 
 class TaskManager:
@@ -63,28 +65,30 @@ class TaskManager:
                     cls._instance._task_lock = threading.Lock()
         return cls._instance
     
-    def create_task(self, task_type: str, metadata: Optional[Dict] = None) -> str:
+    def create_task(self, task_type: str, metadata: Optional[Dict] = None, user_id: Optional[str] = None) -> str:
         """        Args:
-            task_type: 
-            metadata: 
-            
+            task_type:
+            metadata:
+            user_id: owner of this task
+
         Returns:
             ID"""
         task_id = str(uuid.uuid4())
         now = datetime.now()
-        
+
         task = Task(
             task_id=task_id,
             task_type=task_type,
             status=TaskStatus.PENDING,
             created_at=now,
             updated_at=now,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            user_id=user_id
         )
-        
+
         with self._task_lock:
             self._tasks[task_id] = task
-        
+
         return task_id
     
     def get_task(self, task_id: str) -> Optional[Task]:
@@ -146,12 +150,14 @@ class TaskManager:
             error=error
         )
     
-    def list_tasks(self, task_type: Optional[str] = None) -> list:
+    def list_tasks(self, task_type: Optional[str] = None, user_id: Optional[str] = None) -> list:
         """..."""
         with self._task_lock:
             tasks = list(self._tasks.values())
             if task_type:
                 tasks = [t for t in tasks if t.task_type == task_type]
+            if user_id:
+                tasks = [t for t in tasks if t.user_id in (None, user_id)]
             return [t.to_dict() for t in sorted(tasks, key=lambda x: x.created_at, reverse=True)]
     
     def cleanup_old_tasks(self, max_age_hours: int = 24):

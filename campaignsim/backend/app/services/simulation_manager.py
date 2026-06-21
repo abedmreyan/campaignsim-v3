@@ -62,7 +62,8 @@ class SimulationState:
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
     error: Optional[str] = None
-    
+    user_id: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """..."""
         return {
@@ -83,6 +84,7 @@ class SimulationState:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "error": self.error,
+            "user_id": self.user_id,
         }
     
     def to_simple_dict(self) -> Dict[str, Any]:
@@ -165,6 +167,7 @@ class SimulationManager:
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
             error=data.get("error"),
+            user_id=data.get("user_id"),
         )
         
         self._simulations[simulation_id] = state
@@ -176,18 +179,20 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        user_id: Optional[str] = None,
     ) -> SimulationState:
         """        Args:
             project_id: ID
             graph_id: ZepID
             enable_twitter: Twitter
             enable_reddit: Reddit
-            
+            user_id: owner of this simulation
+
         Returns:
             SimulationState"""
         import uuid
         simulation_id = f"sim_{uuid.uuid4().hex[:12]}"
-        
+
         state = SimulationState(
             simulation_id=simulation_id,
             project_id=project_id,
@@ -195,6 +200,7 @@ class SimulationManager:
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
             status=SimulationStatus.CREATED,
+            user_id=user_id,
         )
         
         self._save_simulation_state(state)
@@ -428,22 +434,25 @@ class SimulationManager:
         """..."""
         return self._load_simulation_state(simulation_id)
     
-    def list_simulations(self, project_id: Optional[str] = None) -> List[SimulationState]:
+    def list_simulations(self, project_id: Optional[str] = None, user_id: Optional[str] = None) -> List[SimulationState]:
         """..."""
         simulations = []
-        
+
         if os.path.exists(self.SIMULATION_DATA_DIR):
             for sim_id in os.listdir(self.SIMULATION_DATA_DIR):
                 #  .DS_Store
                 sim_path = os.path.join(self.SIMULATION_DATA_DIR, sim_id)
                 if sim_id.startswith('.') or not os.path.isdir(sim_path):
                     continue
-                
+
                 state = self._load_simulation_state(sim_id)
                 if state:
-                    if project_id is None or state.project_id == project_id:
-                        simulations.append(state)
-        
+                    if project_id is not None and state.project_id != project_id:
+                        continue
+                    if user_id is not None and state.user_id not in (None, user_id):
+                        continue
+                    simulations.append(state)
+
         return simulations
     
     def get_profiles(self, simulation_id: str, platform: str = "reddit") -> List[Dict[str, Any]]:

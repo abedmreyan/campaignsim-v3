@@ -340,7 +340,7 @@ def build_graph():
             }), 400
         
         task_manager = TaskManager()
-        task_id = task_manager.create_task(f"Build graph: {graph_name}")
+        task_id = task_manager.create_task(f"Build graph: {graph_name}", user_id=g.current_user.id)
         logger.info(f"Created graph build task: task_id={task_id}, project_id={project_id}")
         
         project.status = ProjectStatus.GRAPH_BUILDING
@@ -517,11 +517,11 @@ def get_task(task_id: str):
 @require_auth
 def list_tasks():
     """..."""
-    tasks = TaskManager().list_tasks()
-    
+    tasks = TaskManager().list_tasks(user_id=g.current_user.id)
+
     return jsonify({
         "success": True,
-        "data": [t.to_dict() for t in tasks],
+        "data": tasks,
         "count": len(tasks)
     })
 
@@ -532,12 +532,16 @@ def list_tasks():
 def get_graph_data(graph_id: str):
     """..."""
     try:
+        owner_project = ProjectManager.get_project_by_graph_id(graph_id)
+        if owner_project and owner_project.user_id and owner_project.user_id != g.current_user.id:
+            return jsonify({"success": False, "error": "Access denied"}), 403
+
         if Config.KG_BACKEND == 'zep' and not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
                 "error": t('api.zepApiKeyMissing')
             }), 500
-        
+
         builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
         graph_data = builder.get_graph_data(graph_id)
         
@@ -558,12 +562,16 @@ def get_graph_data(graph_id: str):
 def delete_graph(graph_id: str):
     """    Zep"""
     try:
+        owner_project = ProjectManager.get_project_by_graph_id(graph_id)
+        if owner_project and owner_project.user_id and owner_project.user_id != g.current_user.id:
+            return jsonify({"success": False, "error": "Access denied"}), 403
+
         if Config.KG_BACKEND == 'zep' and not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
                 "error": t('api.zepApiKeyMissing')
             }), 500
-        
+
         builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
         builder.delete_graph(graph_id)
         

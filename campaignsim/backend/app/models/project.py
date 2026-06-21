@@ -255,6 +255,16 @@ class ProjectManager:
             return f.read()
     
     @classmethod
+    def get_project_by_graph_id(cls, graph_id: str) -> Optional['Project']:
+        """Return the project that owns the given graph_id, or None."""
+        cls._ensure_projects_dir()
+        for project_id in os.listdir(cls.PROJECTS_DIR):
+            project = cls.get_project(project_id)
+            if project and project.graph_id == graph_id:
+                return project
+        return None
+
+    @classmethod
     def get_project_files(cls, project_id: str) -> List[str]:
         """..."""
         files_dir = cls._get_project_files_dir(project_id)

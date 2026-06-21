@@ -37,17 +37,20 @@ service.interceptors.response.use(
   },
   error => {
     console.error('Response error:', error)
-    
-    
+
+    if (error.response?.status === 403) {
+      console.warn('Access denied (403) — resource belongs to another user')
+      return Promise.reject(new Error('Access denied'))
+    }
+
     if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
       console.error('Request timeout')
     }
-    
-    
+
     if (error.message === 'Network Error') {
       console.error('Network error - please check your connection')
     }
-    
+
     return Promise.reject(error)
   }
 )

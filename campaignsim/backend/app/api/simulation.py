@@ -208,6 +208,7 @@ def create_simulation():
             graph_id=graph_id,
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
+            user_id=g.current_user.id,
         )
         
         return jsonify({
@@ -839,7 +840,7 @@ def get_simulation_history():
         limit = request.args.get('limit', 20, type=int)
         
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
+        simulations = manager.list_simulations(user_id=g.current_user.id)[:limit]
         
         #  Simulation
         enriched_simulations = []
@@ -2945,6 +2946,7 @@ def start_ab_test():
             simulation_id=simulation_id,
             brand_name=data.get("brand_name", ""),
             campaign_goal=data.get("campaign_goal", ""),
+            user_id=g.current_user.id,
         )
 
         for v_data in variants_data:
@@ -3351,6 +3353,7 @@ def list_campaigns():
         limit = int(request.args.get("limit", 50))
         campaigns_dir = _campaigns_dir()
 
+        current_user_id = g.current_user.id
         items = []
         for fname in os.listdir(campaigns_dir):
             if not fname.endswith(".json"):
@@ -3360,6 +3363,11 @@ def list_campaigns():
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
             except Exception:
+                continue
+
+            # Skip campaigns owned by a different user; allow legacy (no user_id)
+            campaign_owner = data.get("user_id")
+            if campaign_owner is not None and campaign_owner != current_user_id:
                 continue
 
             variants = data.get("variants", [])
