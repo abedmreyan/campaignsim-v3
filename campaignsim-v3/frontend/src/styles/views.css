@@ -685,6 +685,13 @@
   box-shadow: var(--glow-accent);
 }
 
+[data-theme="light"] .recommendation-summary {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(10, 191, 173, 0.18), transparent 55%),
+    rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
+}
+
 .recommendation-summary .eyebrow,
 .recommendation-summary p {
   color: #0ABFAD;

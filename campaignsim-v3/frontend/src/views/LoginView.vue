@@ -29,15 +29,19 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/authStore";
+import { useTheme } from "@/composables/useTheme";
 
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const email = ref("");
 const password = ref("");
+
+const { init: initTheme } = useTheme();
+onMounted(initTheme);
 
 async function submit() {
   try {

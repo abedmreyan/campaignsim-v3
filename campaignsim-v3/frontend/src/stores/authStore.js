@@ -19,7 +19,19 @@ export const useAuthStore = defineStore("auth", {
       try {
         const resp = await apiClient.get("/api/auth/me", { _skipRefresh: true });
         this.user = resp.data;
-      } catch {
+      } catch (err) {
+        // Access token may have expired — try refreshing before giving up.
+        // This keeps the user logged in as long as their refresh token (30 days) is valid.
+        if (err?.status === 401 || err?.raw?.response?.status === 401) {
+          try {
+            await apiClient.post("/api/auth/refresh", {}, { _skipRefresh: true });
+            const resp = await apiClient.get("/api/auth/me", { _skipRefresh: true });
+            this.user = resp.data;
+            return;
+          } catch {
+            // Refresh token also expired — user must log in again
+          }
+        }
         this.user = null;
       } finally {
         this.loading = false;

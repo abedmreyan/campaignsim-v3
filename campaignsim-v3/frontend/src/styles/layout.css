@@ -706,6 +706,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   font-family: var(--font-body);
+  text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
   overflow: hidden;

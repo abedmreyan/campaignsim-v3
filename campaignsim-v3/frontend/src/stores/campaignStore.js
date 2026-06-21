@@ -778,12 +778,31 @@ export const useCampaignStore = defineStore("campaign", {
         // Narrative markdown text
         markdown_content: campaignReport.report_text || "",
         // Structured metrics fields (matched to what Step4Report.vue renders)
-        executive_summary: campaignReport.executive_summary || (campaignReport.report_text || "").split("\n\n")[0] || "",
-        top_recommendation: campaignReport.top_recommendation || {
-          variant_id: best.variant_id,
-          variant_name: best.variant_name,
-          reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
-        },
+        executive_summary: campaignReport.executive_summary || (() => {
+          const rt = campaignReport.report_text || "";
+          // Extract the content under the Executive Summary heading
+          const match = rt.match(/##\s*\d*\.?\s*Executive Summary\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (match) return match[1].trim();
+          // Fallback: skip any preamble lines before the first markdown heading
+          const afterHeading = rt.replace(/^[\s\S]*?^#\s/m, "# ");
+          const firstSection = afterHeading.split("\n\n").slice(1).find(p => p.trim().length > 40) || "";
+          return firstSection.trim();
+        })(),
+        top_recommendation: (() => {
+          const tr = campaignReport.top_recommendation;
+          if (tr) {
+            return {
+              variant_id: tr.best_variant_id || tr.variant_id || best.variant_id,
+              variant_name: tr.best_variant_name || tr.variant_name || best.variant_name,
+              reason: tr.one_line_rationale || tr.reason || `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+            };
+          }
+          return {
+            variant_id: best.variant_id,
+            variant_name: best.variant_name,
+            reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+          };
+        })(),
         ranked_variants: ranked.map((v, i) => ({
           rank: i + 1,
           variant_id: v.variant_id,
@@ -793,11 +812,30 @@ export const useCampaignStore = defineStore("campaign", {
           engagement_rate_pct: v.engagement_rate_pct ?? 0,
           trend: v.trend || "flat",
         })),
-        segment_performance: best.segment_scores?.map((s) => ({
-          segment: s.segment,
-          best_variant_id: best.variant_id,
-          engagement_rate_pct: s.engagement_rate_pct ?? 0,
-        })) || [],
+        segment_performance: (() => {
+          // Prefer explicit segment_scores if present on any variant
+          if (best.segment_scores?.length) {
+            return best.segment_scores.map((s) => ({
+              segment: s.segment,
+              best_variant_id: best.variant_id,
+              engagement_rate_pct: s.engagement_rate_pct ?? 0,
+            }));
+          }
+          // Derive from target_segment on each scored variant
+          const bySegment = {};
+          for (const v of ranked) {
+            const seg = v.target_segment || "All";
+            if (!bySegment[seg] || v.engagement_score > bySegment[seg].engagement_score) {
+              bySegment[seg] = v;
+            }
+          }
+          return Object.entries(bySegment).map(([segment, v]) => ({
+            segment,
+            best_variant_id: v.variant_id,
+            best_variant_name: v.variant_name,
+            engagement_rate_pct: v.engagement_rate_pct ?? 0,
+          })).sort((a, b) => b.engagement_rate_pct - a.engagement_rate_pct);
+        })(),
         channel_effectiveness: Object.entries(
           ranked.reduce((acc, v) => {
             const ch = v.channel || "unknown";
@@ -810,7 +848,25 @@ export const useCampaignStore = defineStore("campaign", {
           channel,
           average_engagement_rate_pct: Math.round((total / count) * 100) / 100,
         })),
-        strategic_recommendations: campaignReport.strategic_recommendations || [],
+        strategic_recommendations: (() => {
+          // Prefer structured field from backend
+          if (Array.isArray(campaignReport.strategic_recommendations) && campaignReport.strategic_recommendations.length) {
+            return campaignReport.strategic_recommendations;
+          }
+          // Extract bullet points from the Recommendations section of report_text
+          const rt = campaignReport.report_text || "";
+          const recSection = rt.match(/##\s*\d*\.?\s*(?:Top\s*\d*\s*)?Recommendations?\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (recSection) {
+            const bullets = recSection[1].match(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*([^|]+)\*\*/g);
+            if (bullets?.length) {
+              return bullets.map(b => b.replace(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*/, "").replace(/\*\*$/, "").trim());
+            }
+            // Plain bullet list fallback
+            const lines = recSection[1].split("\n").filter(l => /^[-*\d]/.test(l.trim()));
+            if (lines.length) return lines.map(l => l.replace(/^[-*\d.]+\s*/, "").trim()).filter(Boolean);
+          }
+          return [];
+        })(),
       };
     },
 

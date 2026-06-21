@@ -3,7 +3,7 @@
     <div v-for="item in segments" :key="item.segment" class="segment-matrix__row">
       <span>{{ item.segment }}</span>
       <strong>{{ item.engagement_rate_pct }}%</strong>
-      <small>Best: {{ item.best_variant_id }}</small>
+      <small>Best: {{ item.best_variant_name || item.best_variant_id }}</small>
     </div>
   </div>
 </template>
