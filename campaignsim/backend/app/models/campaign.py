@@ -124,6 +124,7 @@ class Campaign:
     objective: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     variants: List[CampaignVariant] = field(default_factory=list)
+    user_id: Optional[str] = None    # owner — used to filter campaign history per user
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -153,4 +154,5 @@ class Campaign:
             objective=data.get("objective", ""),
             created_at=data.get("created_at", datetime.now().isoformat()),
             variants=variants,
+            user_id=data.get("user_id"),
         )

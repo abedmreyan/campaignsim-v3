@@ -20,6 +20,18 @@ class Config:
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY', 'campaignsim-secret-key')
     DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'DATABASE_URL',
+        'postgresql://cs_user:secret@localhost:5432/campaignsim'
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # JWT
+    JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me-in-production')
+    JWT_ACCESS_TTL_MINUTES = int(os.environ.get('JWT_ACCESS_TTL_MINUTES', '15'))
+    JWT_REFRESH_TTL_DAYS = int(os.environ.get('JWT_REFRESH_TTL_DAYS', '30'))
     
     # JSON - ASCII \uXXXX
     JSON_AS_ASCII = False

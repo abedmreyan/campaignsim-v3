@@ -416,6 +416,7 @@ def build_graph():
             chunk_overlap=chunk_overlap,
             on_success=lambda gid: _sync_brief(graph_id=gid, status='ready'),
             on_failure=lambda err: _sync_brief(status='failed'),
+            user_id=g.current_user.id,
         )
 
         return jsonify({
@@ -440,13 +441,13 @@ def build_graph():
 def get_task(task_id: str):
     """..."""
     task = TaskManager().get_task(task_id)
-    
-    if not task:
+
+    if not task or (task.user_id is not None and task.user_id != str(g.current_user.id)):
         return jsonify({
             "success": False,
             "error": t('api.taskNotFound', id=task_id)
         }), 404
-    
+
     return jsonify({
         "success": True,
         "data": task.to_dict()
@@ -455,11 +456,11 @@ def get_task(task_id: str):
 @graph_bp.route('/tasks', methods=['GET'])
 def list_tasks():
     """..."""
-    tasks = TaskManager().list_tasks()
-    
+    tasks = TaskManager().list_tasks(user_id=str(g.current_user.id))
+
     return jsonify({
         "success": True,
-        "data": [t.to_dict() for t in tasks],
+        "data": tasks,
         "count": len(tasks)
     })
 

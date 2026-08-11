@@ -192,18 +192,31 @@ function formatDate(value) {
 
 async function openReport(item) {
   store.simulationId = item.simulation_id;
+  if (item.campaign_id) store.campaignId = item.campaign_id;
   if (item.graph_id) store.graphId = item.graph_id;
+  // Router guard requires brandBriefId — use campaign_id as sentinel when reopening from history
+  if (!store.brandBriefId && item.campaign_id) store.selectBrief(item.campaign_id);
 
   try {
     if (item.report_id) {
       store.reportId = item.report_id;
       await store.loadReport(item.report_id);
-    } else if (item.status === "completed") {
+    } else if (item.status === "completed" && item.campaign_id) {
       store.simulationRun.status = "completed";
-      await store.generateReport();
-    } else {
+      if (item.has_report) {
+        // Report already exists — load directly without re-generating (~instant)
+        await store.loadCampaignReport(item.campaign_id);
+      } else {
+        await store.generateReport();
+      }
+      store.reportId = item.campaign_id;
+    } else if (item.status !== "completed") {
       store.setNotice("Report is available when the simulation is completed.");
       return;
+    } else {
+      store.simulationRun.status = "completed";
+      await store.generateReport();
+      store.reportId = item.campaign_id;
     }
     store.goToStep(4);
     router.push({ name: "report", params: { reportId: store.reportId } });

@@ -527,6 +527,7 @@ def generate_campaign_recommendations():
         task_id = task_manager.create_task(
             task_type="campaign_report",
             metadata={"campaign_id": campaign_id},
+            user_id=g.current_user.id,
         )
 
         def _run():
@@ -666,9 +667,22 @@ def list_campaigns():
         limit = int(request.args.get("limit", 50))
         campaigns_dir = _campaigns_dir()
 
+        # Campaign JSON files carry no owner field of their own — ownership is
+        # tracked in the campaigns table (campaign_ref -> user_id), same as
+        # everywhere else. Legacy files with no matching row are excluded
+        # rather than shown to everyone.
+        owned_refs = {
+            rec.campaign_ref
+            for rec in CampaignRecord.query.filter_by(user_id=g.current_user.id).all()
+            if rec.campaign_ref
+        }
+
         items = []
         for fname in os.listdir(campaigns_dir):
             if not fname.endswith(".json"):
+                continue
+            campaign_ref = fname[:-len(".json")]
+            if campaign_ref not in owned_refs:
                 continue
             path = os.path.join(campaigns_dir, fname)
             try:

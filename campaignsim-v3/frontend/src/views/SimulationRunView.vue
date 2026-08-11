@@ -3,7 +3,6 @@
     <div class="view-stack stagger-in mission-control-view">
       <PageHeader
         title="Simulation run"
-        eyebrow="Mission control"
         :description="headerDescription"
       >
         <template #actions>

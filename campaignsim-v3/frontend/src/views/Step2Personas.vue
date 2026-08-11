@@ -34,9 +34,22 @@
           <span>Search</span>
           <input v-model.trim="search" type="search" placeholder="Name, segment, profession…" />
         </label>
-        <AppButton :disabled="!store.graphReady" :loading="store.personas.loading" @click="store.generatePersonas(count)">
-          Generate personas
-        </AppButton>
+        <div style="display: flex; gap: 0.5rem;">
+          <AppButton
+            variant="secondary"
+            :disabled="!store.personas.items.length || store.personas.loading"
+            @click="regenerateAll"
+          >
+            Regenerate all
+          </AppButton>
+          <AppButton
+            :disabled="!store.graphReady || store.personas.loading"
+            :loading="store.personas.loading"
+            @click="store.generatePersonas(count)"
+          >
+            {{ store.personas.items.length ? "Generate more" : "Generate personas" }}
+          </AppButton>
+        </div>
       </div>
 
       <div v-if="segments.length" class="filter-chips" style="margin-top: 1rem">
@@ -112,12 +125,20 @@
     />
 
     <div v-else class="persona-grid">
-      <PersonaCard
-        v-for="persona in filteredPersonas"
-        :key="persona.user_id"
-        :persona="persona"
-        @select="activePersona = persona"
-      />
+      <div v-for="persona in filteredPersonas" :key="persona.user_id || persona.id" class="persona-card-wrapper">
+        <PersonaCard
+          :persona="persona"
+          @select="activePersona = persona"
+        />
+        <button
+          class="persona-delete-btn"
+          type="button"
+          title="Delete persona"
+          @click.stop="store.deletePersona(persona.id)"
+        >
+          &#x2715;
+        </button>
+      </div>
     </div>
 
     <PersonaDetailDrawer :persona="activePersona" @close="activePersona = null" />
@@ -175,7 +196,7 @@ async function generateFromSegments() {
       totalN: segmentTotalN.value,
       mode: segmentMode.value,
     });
-    await store.loadPersonas();
+    await store.loadPersonas(store.brandBriefId);
   } catch (err) {
     segmentGenError.value = err?.message || "Could not generate personas from segments.";
   } finally {
@@ -183,7 +204,19 @@ async function generateFromSegments() {
   }
 }
 
-onMounted(loadApprovedSegments);
+// Load persisted personas from DB on mount
+onMounted(() => {
+  loadApprovedSegments();
+  if (store.brandBriefId && !store.personas.items.length) {
+    store.loadPersonas(store.brandBriefId);
+  }
+});
+
+async function regenerateAll() {
+  if (!store.brandBriefId) return;
+  await store.clearPersonas(store.brandBriefId);
+  store.generatePersonas(count.value);
+}
 
 const segments = computed(() => [...new Set(store.personas.items.map((p) => p.segment).filter(Boolean))]);
 
@@ -220,5 +253,30 @@ const filteredPersonas = computed(() =>
   align-items: center;
   gap: 0.4rem;
   font-size: 0.88rem;
+}
+
+.persona-card-wrapper {
+  position: relative;
+}
+.persona-delete-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-danger, #ef4444);
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.persona-card-wrapper:hover .persona-delete-btn {
+  opacity: 1;
 }
 </style>

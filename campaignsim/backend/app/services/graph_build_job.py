@@ -26,6 +26,7 @@ def start_graph_build(
     chunk_overlap: int,
     on_success=None,
     on_failure=None,
+    user_id=None,
 ) -> str:
     """Start the KG build in a daemon thread. Returns the task_id immediately.
 
@@ -34,7 +35,7 @@ def start_graph_build(
     an app context themselves.
     """
     task_manager = TaskManager()
-    task_id = task_manager.create_task(f"Build graph: {graph_name}")
+    task_id = task_manager.create_task(f"Build graph: {graph_name}", user_id=str(user_id) if user_id else None)
     logger.info(f"Created graph build task: task_id={task_id}, project_id={project.project_id}")
 
     project.status = ProjectStatus.GRAPH_BUILDING

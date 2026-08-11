@@ -77,6 +77,7 @@ export const useCampaignStore = defineStore("campaign", {
   state: () => ({
     currentStep: Number(localStorage.getItem(STEP_KEY) || persistedState?.currentStep || 1),
     notice: null,
+    brandBriefId: sessionStorage.getItem("cs_active_brief_id") || null,
 
     project: persistedProject || persistedState?.project || null,
     simulationId: persistedProject?.simulation_id || persistedState?.simulationId || null,
@@ -299,6 +300,16 @@ export const useCampaignStore = defineStore("campaign", {
       }, 4200);
     },
 
+    selectBrief(id) {
+      this.brandBriefId = id;
+      sessionStorage.setItem("cs_active_brief_id", id);
+    },
+
+    clearBrief() {
+      this.brandBriefId = null;
+      sessionStorage.removeItem("cs_active_brief_id");
+    },
+
     async uploadBrandBrief(file, simulationRequirement) {
       if (!file) throw new Error("Select a PDF or TXT brand brief first.");
       const extension = file.name.split(".").pop()?.toLowerCase();
@@ -465,6 +476,7 @@ export const useCampaignStore = defineStore("campaign", {
         const task = await generateProfiles({
           simulation_id: this.simulationId,
           graph_id: this.graphId,
+          brief_id: this.brandBriefId,
           count,
           entity_types: ["CustomerPersona", "Person", "Influencer", "Consumer", "Buyer"],
           language: "en",
@@ -475,7 +487,7 @@ export const useCampaignStore = defineStore("campaign", {
         // personas.items already set from task result in pollProfileGenerationStatus.
         // Fall back to the /profiles endpoint only if task result had no profiles.
         if (!this.personas.items.length) {
-          await this.loadPersonas();
+          await this.loadPersonas(this.brandBriefId);
         }
         this.personas.progress = 100;
         this.personas.progressMessage = `${this.personas.items.length} personas generated`;
@@ -521,11 +533,30 @@ export const useCampaignStore = defineStore("campaign", {
       throw new Error("Profile generation timed out — please try again.");
     },
 
-    async loadPersonas() {
-      const data = await getProfiles(this.simulationId);
-      this.personas.items = data.personas || data.items || data.profiles || [];
-      this.persist();
-      return data;
+    async loadPersonas(briefId) {
+      this.personas.loading = true;
+      this.personas.error = null;
+      try {
+        const { apiClient } = await import("@/api/client.js");
+        const resp = await apiClient.get(`/api/simulation/personas?brief_id=${briefId}`);
+        this.personas.items = resp.data.items;
+      } catch (err) {
+        this.personas.error = err.message || "Failed to load personas";
+      } finally {
+        this.personas.loading = false;
+      }
+    },
+
+    async deletePersona(personaId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.delete(`/api/simulation/persona/${personaId}`);
+      this.personas.items = this.personas.items.filter((p) => p.id !== personaId);
+    },
+
+    async clearPersonas(briefId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.post(`/api/simulation/personas/clear?brief_id=${briefId}`);
+      this.personas.items = [];
     },
 
     addVariant(variant) {
@@ -553,9 +584,13 @@ export const useCampaignStore = defineStore("campaign", {
       this.persist();
     },
 
-    async startAbTest() {
-      if (!this.canStartSimulation) {
-        throw new Error("Create 1 to 6 variants before starting the A/B simulation.");
+    async startAbTest(selectedVariantIds = null) {
+      const variantsToRun = selectedVariantIds
+        ? this.variants.filter((v) => selectedVariantIds.includes(v.variant_id))
+        : this.variants;
+
+      if (variantsToRun.length < 1 || variantsToRun.length > 6) {
+        throw new Error("Select 1 to 6 variants before starting the A/B simulation.");
       }
 
       this.simulationRun.loading = true;
@@ -566,7 +601,7 @@ export const useCampaignStore = defineStore("campaign", {
           brand_name: this.project?.project_name || "",
           campaign_goal: this.project?.simulation_requirement || "",
           objective: this.campaignObjective || "",
-          variants: this.variants.map(toApiVariant),
+          variants: variantsToRun.map(toApiVariant),
         });
         // Save campaign_id — required for ab_status polling and report generation
         this.campaignId = data.campaign_id || null;
@@ -600,23 +635,17 @@ export const useCampaignStore = defineStore("campaign", {
           // Clear any previous transient error on success
           if (this.simulationRun.error) this.simulationRun.error = null;
           const allDone = data.all_done;
-          const MAX_ROUNDS = 10;
-          // Use persona count to estimate round progress from actions_count.
-          // Each simulation round processes all personas, so:
-          //   estimated_round  = floor(actions_count / persona_count)
-          //   variant_progress = actions_count / (persona_count * MAX_ROUNDS)
-          const personaCount = Math.max(1, this.personas.items.length || 30);
-          const expectedActionsPerVariant = personaCount * MAX_ROUNDS;
 
           this.simulationRun.variants = (data.variants || []).map((v) => {
+            const maxRounds = v.max_rounds || 10;
             if (v.runner_status === "completed") {
               return {
                 variant_id: v.variant_id,
                 variant_name: v.variant_name,
                 status: "completed",
                 progress: 100,
-                current_round: MAX_ROUNDS,
-                max_rounds: MAX_ROUNDS,
+                current_round: maxRounds,
+                max_rounds: maxRounds,
               };
             }
             if (v.runner_status === "failed") {
@@ -626,23 +655,21 @@ export const useCampaignStore = defineStore("campaign", {
                 status: "failed",
                 progress: 0,
                 current_round: null,
-                max_rounds: MAX_ROUNDS,
+                max_rounds: maxRounds,
               };
             }
-            const actions = v.actions_count || 0;
-            const estimatedPct = actions > 0
-              ? Math.min(95, Math.round((actions / expectedActionsPerVariant) * 100))
-              : 0;
-            const estimatedRound = actions > 0
-              ? Math.min(MAX_ROUNDS - 1, Math.floor(actions / personaCount))
+            // Use round_end event counts from backend (v.current_round / v.max_rounds)
+            const currentRound = v.current_round || 0;
+            const progress = currentRound > 0
+              ? Math.min(95, Math.round((currentRound / maxRounds) * 100))
               : 0;
             return {
               variant_id: v.variant_id,
               variant_name: v.variant_name,
               status: "running",
-              progress: estimatedPct,
-              current_round: estimatedRound,
-              max_rounds: MAX_ROUNDS,
+              progress,
+              current_round: currentRound,
+              max_rounds: maxRounds,
             };
           });
 
@@ -767,12 +794,31 @@ export const useCampaignStore = defineStore("campaign", {
         // Narrative markdown text
         markdown_content: campaignReport.report_text || "",
         // Structured metrics fields (matched to what Step4Report.vue renders)
-        executive_summary: campaignReport.executive_summary || (campaignReport.report_text || "").split("\n\n")[0] || "",
-        top_recommendation: campaignReport.top_recommendation || {
-          variant_id: best.variant_id,
-          variant_name: best.variant_name,
-          reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
-        },
+        executive_summary: campaignReport.executive_summary || (() => {
+          const rt = campaignReport.report_text || "";
+          // Extract the content under the Executive Summary heading
+          const match = rt.match(/##\s*\d*\.?\s*Executive Summary\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (match) return match[1].trim();
+          // Fallback: skip any preamble lines before the first markdown heading
+          const afterHeading = rt.replace(/^[\s\S]*?^#\s/m, "# ");
+          const firstSection = afterHeading.split("\n\n").slice(1).find(p => p.trim().length > 40) || "";
+          return firstSection.trim();
+        })(),
+        top_recommendation: (() => {
+          const tr = campaignReport.top_recommendation;
+          if (tr) {
+            return {
+              variant_id: tr.best_variant_id || tr.variant_id || best.variant_id,
+              variant_name: tr.best_variant_name || tr.variant_name || best.variant_name,
+              reason: tr.one_line_rationale || tr.reason || `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+            };
+          }
+          return {
+            variant_id: best.variant_id,
+            variant_name: best.variant_name,
+            reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+          };
+        })(),
         ranked_variants: ranked.map((v, i) => ({
           rank: i + 1,
           variant_id: v.variant_id,
@@ -782,11 +828,30 @@ export const useCampaignStore = defineStore("campaign", {
           engagement_rate_pct: v.engagement_rate_pct ?? 0,
           trend: v.trend || "flat",
         })),
-        segment_performance: best.segment_scores?.map((s) => ({
-          segment: s.segment,
-          best_variant_id: best.variant_id,
-          engagement_rate_pct: s.engagement_rate_pct ?? 0,
-        })) || [],
+        segment_performance: (() => {
+          // Prefer explicit segment_scores if present on any variant
+          if (best.segment_scores?.length) {
+            return best.segment_scores.map((s) => ({
+              segment: s.segment,
+              best_variant_id: best.variant_id,
+              engagement_rate_pct: s.engagement_rate_pct ?? 0,
+            }));
+          }
+          // Derive from target_segment on each scored variant
+          const bySegment = {};
+          for (const v of ranked) {
+            const seg = v.target_segment || "All";
+            if (!bySegment[seg] || v.engagement_score > bySegment[seg].engagement_score) {
+              bySegment[seg] = v;
+            }
+          }
+          return Object.entries(bySegment).map(([segment, v]) => ({
+            segment,
+            best_variant_id: v.variant_id,
+            best_variant_name: v.variant_name,
+            engagement_rate_pct: v.engagement_rate_pct ?? 0,
+          })).sort((a, b) => b.engagement_rate_pct - a.engagement_rate_pct);
+        })(),
         channel_effectiveness: Object.entries(
           ranked.reduce((acc, v) => {
             const ch = v.channel || "unknown";
@@ -799,7 +864,25 @@ export const useCampaignStore = defineStore("campaign", {
           channel,
           average_engagement_rate_pct: Math.round((total / count) * 100) / 100,
         })),
-        strategic_recommendations: campaignReport.strategic_recommendations || [],
+        strategic_recommendations: (() => {
+          // Prefer structured field from backend
+          if (Array.isArray(campaignReport.strategic_recommendations) && campaignReport.strategic_recommendations.length) {
+            return campaignReport.strategic_recommendations;
+          }
+          // Extract bullet points from the Recommendations section of report_text
+          const rt = campaignReport.report_text || "";
+          const recSection = rt.match(/##\s*\d*\.?\s*(?:Top\s*\d*\s*)?Recommendations?\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (recSection) {
+            const bullets = recSection[1].match(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*([^|]+)\*\*/g);
+            if (bullets?.length) {
+              return bullets.map(b => b.replace(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*/, "").replace(/\*\*$/, "").trim());
+            }
+            // Plain bullet list fallback
+            const lines = recSection[1].split("\n").filter(l => /^[-*\d]/.test(l.trim()));
+            if (lines.length) return lines.map(l => l.replace(/^[-*\d.]+\s*/, "").trim()).filter(Boolean);
+          }
+          return [];
+        })(),
       };
     },
 
@@ -817,6 +900,23 @@ export const useCampaignStore = defineStore("campaign", {
       }
     },
 
+    async loadCampaignReport(campaignId = this.campaignId) {
+      this.report.loading = true;
+      this.report.error = null;
+      try {
+        const data = await getCampaignReportApi(campaignId);
+        this.report.data = this._normalizeCampaignReport(data);
+        this.simulationRun.status = "completed";
+        this.persist();
+        return this.report.data;
+      } catch (error) {
+        this.report.error = normalizeError(error, "Could not load campaign report.");
+        throw error;
+      } finally {
+        this.report.loading = false;
+      }
+    },
+
     async interviewPersona(personaId, question) {
       if (!this.report.data || this.personas.items.length === 0) {
         throw new Error("Generate a report and personas before interviewing personas.");
@@ -830,7 +930,7 @@ export const useCampaignStore = defineStore("campaign", {
       this.interviewMessages.push(userMessage);
       const answer = await interviewPersonaApi({
         simulation_id: this.simulationId,
-        report_id: this.reportId,
+        campaign_id: this.campaignId,
         persona_id: personaId,
         question,
       });
@@ -850,7 +950,34 @@ export const useCampaignStore = defineStore("campaign", {
       this.history.error = null;
       try {
         const data = await getHistory();
-        this.history.items = data.items || data.history || [];
+        // getHistory() returns the unwrapped payload (array or object depending on St())
+        // Handle both: raw array OR object with .data/.items/.history
+        const raw = Array.isArray(data) ? data : (data?.data || data?.items || data?.history || []);
+        this.history.items = raw.map((c) => {
+          // Find the best completed variant (for "top variant" column)
+          const variants = c.variants || [];
+          const completed = variants.filter((v) => v.status === "completed");
+          const topVariant = completed[0] || variants[0];
+          return {
+            // IDs
+            simulation_id: c.simulation_id || c.campaign_id,
+            campaign_id:   c.campaign_id,
+            // Display
+            project_name:  c.brand_name || c.campaign_goal || "Campaign",
+            status:        c.overall_status || c.status || "pending",
+            variants_count: c.variant_count ?? variants.length,
+            top_variant_name: topVariant?.variant_name || null,
+            // Dates
+            created_at: c.created_at,
+            updated_at: c.updated_at || c.created_at,
+            // Navigation
+            has_report: c.has_report || false,
+            report_id:  c.report_id || null,
+            graph_id:   c.graph_id || null,
+            // Raw
+            _raw: c,
+          };
+        });
         this.persist();
         return data;
       } catch (error) {

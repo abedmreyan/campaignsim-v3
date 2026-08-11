@@ -184,7 +184,7 @@ def import_dataset_route(dataset_id):
     from ..models.task import TaskManager, TaskStatus
 
     task_manager = TaskManager()
-    task_id = task_manager.create_task(task_type="dataset_import", metadata={"dataset_id": str(dataset.id)})
+    task_id = task_manager.create_task(task_type="dataset_import", metadata={"dataset_id": str(dataset.id)}, user_id=str(g.current_user.id))
     app_obj = current_app._get_current_object()
     dataset_id_val, schema_map, file_path, source_type = dataset.id, dataset.schema_map, dataset.file_path, dataset.source_type
 
@@ -216,7 +216,7 @@ def segment_dataset_route(dataset_id):
     from ..models.task import TaskManager, TaskStatus
 
     task_manager = TaskManager()
-    task_id = task_manager.create_task(task_type="dataset_segment", metadata={"dataset_id": str(dataset.id)})
+    task_id = task_manager.create_task(task_type="dataset_segment", metadata={"dataset_id": str(dataset.id)}, user_id=str(g.current_user.id))
     app_obj = current_app._get_current_object()
     dataset_id_val, user_id = dataset.id, g.current_user.id
 

@@ -225,6 +225,7 @@ def rebuild_graph(brief_id):
             chunk_overlap=Config.DEFAULT_CHUNK_OVERLAP,
             on_success=lambda gid: _sync(graph_id=gid, status='ready'),
             on_failure=lambda err: _sync(status='failed'),
+            user_id=g.current_user.id,
         )
 
         return jsonify({

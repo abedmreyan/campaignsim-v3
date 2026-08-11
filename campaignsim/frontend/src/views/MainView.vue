@@ -3,7 +3,15 @@
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
+        <button class="back-btn" @click="router.push('/')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          All Projects
+        </button>
+        <div class="header-divider"></div>
         <div class="brand" @click="router.push('/')">CAMPAIGNSIM</div>
+        <span v-if="projectData?.name" class="project-name-label">/ {{ projectData.name }}</span>
       </div>
       
       <div class="header-center">
@@ -438,12 +446,54 @@ onUnmounted(() => {
   transform: translateX(-50%);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid #E0E0E0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.back-btn:hover {
+  background: #F5F5F5;
+  border-color: #CCC;
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: #E0E0E0;
+}
+
 .brand {
   font-family: 'JetBrains Mono', monospace;
   font-weight: 800;
   font-size: 18px;
   letter-spacing: 1px;
   cursor: pointer;
+}
+
+.project-name-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #888;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .view-switcher {

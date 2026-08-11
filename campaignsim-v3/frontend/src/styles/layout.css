@@ -199,7 +199,7 @@
   backdrop-filter: blur(var(--glass-blur));
   z-index: 20;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* ── Topbar sub-areas ──────────────────────────────────────────────────────── */
@@ -306,6 +306,13 @@
   font-family: var(--font-display);
   font-size: 1rem;
   letter-spacing: -0.02em;
+}
+
+.brand__logo {
+  height: 2rem;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .brand span,
@@ -540,24 +547,37 @@
 /* ─── Notice ──────────────────────────────────────────────────────────────── */
 
 .notice {
-  margin: 1rem auto 0;
-  width: min(calc(100% - 2 * var(--shell-gutter)), var(--shell-max));
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-soft);
-  color: var(--color-warning);
-  padding: 0.9rem 1rem;
+  position: fixed;
+  bottom: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  white-space: nowrap;
+  max-width: calc(100vw - 2rem);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 2rem;
+  background: var(--color-warning-soft, rgba(251,191,36,0.12));
+  color: var(--color-warning, #f59e0b);
+  padding: 0.55rem 1.125rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.12);
+  pointer-events: none;
 }
 
 .notice-slide-enter-active,
 .notice-slide-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
-.notice-slide-enter-from,
+.notice-slide-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+
 .notice-slide-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateX(-50%) translateY(10px);
 }
 
 /* ─── Main Content Area ───────────────────────────────────────────────────── */
@@ -615,39 +635,23 @@
   text-decoration: none;
   overflow: hidden;
 }
-.sidebar__logo-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 2rem; height: 2rem;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-accent);
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.78rem;
-  font-family: var(--font-display);
-  box-shadow: var(--glow-accent-sm);
-  flex-shrink: 0;
-  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+.sidebar__logo-img {
+  height: 2rem;
+  width: auto;
+  max-width: 9rem;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+  /* Clip to icon-only width when sidebar is collapsed */
+  transition: max-width 0.22s ease, opacity 0.22s ease;
 }
-.sidebar__logo-link:hover .sidebar__logo-mark {
-  box-shadow: var(--glow-accent);
-  transform: scale(1.06) rotate(-3deg);
+/* Collapsed: show only the icon portion (~2rem) */
+.sidebar__logo-img {
+  max-width: 2rem;
+  overflow: hidden;
 }
-.sidebar__logo-text {
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateX(-6px);
-  transition: opacity 0.22s ease, transform 0.22s ease;
-  pointer-events: none;
-}
-.app-shell--expanded .sidebar__logo-text {
-  opacity: 1;
-  transform: translateX(0);
+.app-shell--expanded .sidebar__logo-img {
+  max-width: 9rem;
 }
 
 /* Collapse button */
@@ -693,6 +697,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   font-family: var(--font-body);
+  text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
   overflow: hidden;

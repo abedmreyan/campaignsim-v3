@@ -18,7 +18,8 @@ import { useCampaignStore } from "@/stores/campaignStore";
 import { useAuthStore } from "@/stores/authStore";
 import { isMockMode } from "@/api/campaignApi";
 
-const PUBLIC_ROUTE_NAMES = new Set(["home", "login", "signup"]);
+// Routes that do not require authentication
+const PUBLIC_ROUTES = new Set(["home", "login", "signup"]);
 
 const routes = [
   {
@@ -56,21 +57,13 @@ const routes = [
     name: "simulation-run",
     component: SimulationRunView,
   },
-  {
-    path: "/report/:reportId",
-    name: "report",
-    component: Step4Report,
-  },
+  { path: "/report/:reportId", name: "report", component: Step4Report },
   {
     path: "/interaction/:simulationId",
     name: "interaction",
     component: Step5Interaction,
   },
-  {
-    path: "/history",
-    name: "history",
-    component: HistoryDatabase,
-  },
+  { path: "/history", name: "history", component: HistoryDatabase },
   {
     path: "/campaign/:campaignId/report",
     name: "CampaignReport",
@@ -104,26 +97,33 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   // Mock mode is a sandboxed, backend-free demo — auth doesn't apply.
-  if (!isMockMode && !PUBLIC_ROUTE_NAMES.has(to.name)) {
+  if (!isMockMode) {
     const auth = useAuthStore();
-
     if (!auth.checkedSession) {
       await auth.fetchMe();
     }
 
-    if (!auth.isAuthenticated) {
+    // On initial app load (no prior route), send already-authenticated users
+    // straight to their briefs rather than the landing page.
+    if (to.name === "home" && auth.isAuthenticated && from.name == null) {
+      return { name: "briefs" };
+    }
+
+    if (!PUBLIC_ROUTES.has(to.name) && !auth.isAuthenticated) {
       return { name: "login", query: { redirect: to.fullPath } };
     }
-  }
 
-  if (!isMockMode && ["login", "signup"].includes(to.name)) {
-    const auth = useAuthStore();
-    if (!auth.checkedSession) {
-      await auth.fetchMe();
+    if (["login", "signup"].includes(to.name) && auth.isAuthenticated) {
+      return { name: "briefs" };
     }
-    if (auth.isAuthenticated) {
+
+    // Workflow routes additionally require a selected brand brief.
+    const store = useCampaignStore();
+    const workflowRoutes = new Set(["graph", "simulation-run", "report", "interaction"]);
+    if (workflowRoutes.has(to.name) && !store.brandBriefId) {
+      store.setNotice("Select a brand brief before entering the workflow.");
       return { name: "briefs" };
     }
   }
@@ -133,15 +133,13 @@ router.beforeEach(async (to) => {
     store.setNotice("Create at least one campaign variant before starting a simulation.");
     return { name: "process" };
   }
-
-  if (to.name === "report" && store.simulationRun.status !== "completed" && !store.report.data) {
+  if (to.name === "report" && store.simulationRun?.status !== "completed" && !store.report?.data) {
     store.setNotice("Run a simulation before opening the report.");
-    return { name: "process" };
+    return "/process";
   }
-
-  if (to.name === "interaction" && (!store.report.data || store.personas.items.length === 0)) {
+  if (to.name === "interaction" && (!store.report?.data || store.personas.items.length === 0)) {
     store.setNotice("Generate a report and personas before interviewing personas.");
-    return { name: "process" };
+    return "/process";
   }
 
   return true;
