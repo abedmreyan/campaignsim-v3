@@ -47,7 +47,7 @@ Body: Send your friends a $25 Airbnb credit. When they travel, you'll get $25 to
 CTA: Send $25
 Target segment: Community Advocate (Segment 1)
 Channel: Email
-Format: Transactional/Promotional Email
+Format: EmailNewsletter
 
 VARIANT B — "Selfish Framing" (The "Get" Message)
 Headline: Invite your friends, get $25.
@@ -55,12 +55,9 @@ Body: Want $25 for your next trip? Invite your friends to Airbnb. When they trav
 CTA: Get $25
 Target segment: Value Maximizer (Segment 2)
 Channel: Email
-Format: Transactional/Promotional Email
+Format: EmailNewsletter
 
 === BRAND VOICE ===
 
 Tone: Inspiring, personal, human-centric.
 We focus on the experience and the connection, not just the transaction.
-
-=== REAL-WORLD GROUND TRUTH (DO NOT INCLUDE IN SIMULATION GOAL) ===
-In the actual published A/B test by the Airbnb Growth team, Variant A (Altruistic) outperformed Variant B (Selfish) significantly across a massive sample size. The altruistic framing reduced social friction, making users feel generous rather than feeling like they were exploiting their friends for a payout.

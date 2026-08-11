@@ -66,6 +66,15 @@
           </svg>
           <span class="sidebar__label">History</span>
         </RouterLink>
+
+        <RouterLink v-if="!store.isMockMode" to="/briefs" class="sidebar__item" active-class="sidebar__item--active">
+          <svg class="sidebar__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>
+            <path d="M9 13h6M9 17h6"/>
+          </svg>
+          <span class="sidebar__label">Brand briefs</span>
+        </RouterLink>
       </nav>
 
       <div class="sidebar__divider" aria-hidden="true" />
@@ -73,14 +82,19 @@
       <!-- Future sections -->
       <div class="sidebar__section-label">Integrations</div>
 
-      <div class="sidebar__item sidebar__item--soon" title="CRM Integrations — Coming soon">
+      <RouterLink
+        v-if="!store.isMockMode"
+        to="/audience/data"
+        class="sidebar__item"
+        :class="{ 'sidebar__item--active': isAudienceActive }"
+        title="Customer data & segments"
+      >
         <svg class="sidebar__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
         </svg>
-        <span class="sidebar__label">CRM</span>
-        <span class="sidebar__soon-tag">Soon</span>
-      </div>
+        <span class="sidebar__label">Audience (CRM)</span>
+      </RouterLink>
 
       <div class="sidebar__item sidebar__item--soon" title="User Enrollment — Coming soon">
         <svg class="sidebar__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -103,7 +117,16 @@
         <span class="sidebar__label">Settings</span>
       </button>
 
-      <div class="sidebar__user">
+      <button
+        v-if="!store.isMockMode && auth.user"
+        class="sidebar__user sidebar__item--btn"
+        title="Log out"
+        @click="handleLogout"
+      >
+        <span class="sidebar__avatar">{{ userInitial }}</span>
+        <span class="sidebar__label sidebar__user-text">{{ auth.user.display_name || auth.user.email }}</span>
+      </button>
+      <div v-else class="sidebar__user">
         <span class="sidebar__avatar">A</span>
         <span class="sidebar__label sidebar__user-text">Account</span>
       </div>
@@ -220,15 +243,27 @@ import MetricTile from "@/components/common/MetricTile.vue";
 import ProgressRing from "@/components/common/ProgressRing.vue";
 import StatusBadge from "@/components/common/StatusBadge.vue";
 import { useCampaignStore } from "@/stores/campaignStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useTheme } from "@/composables/useTheme";
 
 const store = useCampaignStore();
+const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
 const sidebarExpanded = ref(false);
 const { theme, toggle: toggleTheme, init: initTheme } = useTheme();
 onMounted(initTheme);
+
+const userInitial = computed(() => {
+  const source = auth.user?.display_name || auth.user?.email || "A";
+  return source.charAt(0).toUpperCase();
+});
+
+async function handleLogout() {
+  await auth.logout();
+  router.push("/login");
+}
 
 const stepItems = [
   { number: 1, label: "Knowledge Graph" },
@@ -244,6 +279,8 @@ const isWorkflowActive = computed(() =>
     route.path.startsWith(p)
   )
 );
+
+const isAudienceActive = computed(() => route.path.startsWith("/audience"));
 
 // Current page identifier for per-page CSS backgrounds
 const currentPage = computed(() => {

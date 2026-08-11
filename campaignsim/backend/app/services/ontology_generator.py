@@ -134,19 +134,23 @@ class OntologyGenerator:
         self,
         document_texts: List[str],
         simulation_requirement: str,
-        additional_context: Optional[str] = None
+        additional_context: Optional[str] = None,
+        business_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """        Args:
             document_texts: Document
-            simulation_requirement: 
-            additional_context: 
-            
+            simulation_requirement:
+            additional_context:
+            business_type: one of app.services.business_context.BUSINESS_TYPES;
+                steers which entity types the LLM prioritises (see business_context.py)
+
         Returns:
             entity_types, edge_types"""
         user_message = self._build_user_message(
-            document_texts, 
+            document_texts,
             simulation_requirement,
-            additional_context
+            additional_context,
+            business_type,
         )
         
         lang_instruction = get_language_instruction()
@@ -174,18 +178,19 @@ class OntologyGenerator:
         self,
         document_texts: List[str],
         simulation_requirement: str,
-        additional_context: Optional[str]
+        additional_context: Optional[str],
+        business_type: Optional[str] = None,
     ) -> str:
         """..."""
-        
+
         combined_text = "\n\n---\n\n".join(document_texts)
         original_length = len(combined_text)
-        
+
         # 5LLM
         if len(combined_text) > self.MAX_TEXT_LENGTH_FOR_LLM:
             combined_text = combined_text[:self.MAX_TEXT_LENGTH_FOR_LLM]
             combined_text += f"\n\n...(original {original_length} chars, truncated to {self.MAX_TEXT_LENGTH_FOR_LLM} chars for ontology)..."
-        
+
         message = f"""## Campaign Goal
 
 {simulation_requirement}
@@ -200,6 +205,15 @@ class OntologyGenerator:
 ## Additional Context
 
 {additional_context}
+"""
+
+        from .business_context import ontology_guidance
+        guidance = ontology_guidance(business_type)
+        if guidance:
+            message += f"""
+## Business Type Guidance
+
+{guidance}
 """
 
         message += """

@@ -7,16 +7,19 @@
       </label>
       <label>
         <span>Channel</span>
-        <select v-model="form.channel">
-          <option value="">Select channel</option>
-          <option v-for="channel in channels" :key="channel" :value="channel">{{ channel }}</option>
+        <select v-model="form.channel" :disabled="loadingChannels" @change="onChannelChange">
+          <option value="">{{ loadingChannels ? "Loading channels…" : "Select channel" }}</option>
+          <option v-for="channel in channels" :key="channel.key" :value="channel.key">
+            {{ channel.name }}{{ channel.is_builtin ? "" : " (custom)" }}
+          </option>
+          <option value="__create_custom__">+ Create custom channel…</option>
         </select>
       </label>
       <label>
         <span>Format</span>
-        <select v-model="form.format">
-          <option value="">Select format</option>
-          <option v-for="format in formats" :key="format" :value="format">{{ format }}</option>
+        <select v-model="form.format" :disabled="!selectedChannel">
+          <option value="">{{ selectedChannel ? "Select format" : "Select a channel first" }}</option>
+          <option v-for="format in availableFormats" :key="format" :value="format">{{ format }}</option>
         </select>
       </label>
       <label>
@@ -34,8 +37,8 @@
         <span>CTA</span>
         <input v-model.trim="form.cta" type="text" placeholder="Try it now" />
       </label>
-      <label v-if="form.channel === 'email'">
-        <span>Email subject</span>
+      <label v-if="selectedChannel?.kind === 'direct'">
+        <span>Email/message subject</span>
         <input v-model.trim="form.email_subject" type="text" placeholder="Your mornings just got better" />
       </label>
       <label>
@@ -44,7 +47,13 @@
       </label>
       <label>
         <span>Max rounds</span>
-        <input v-model.number="form.max_rounds" type="number" min="1" max="50" />
+        <input
+          v-model.number="form.max_rounds"
+          type="number"
+          min="1"
+          max="50"
+          :placeholder="channelDefaultRounds ? `Default: ${channelDefaultRounds}` : ''"
+        />
       </label>
     </div>
     <label>
@@ -63,11 +72,15 @@
       <AppButton v-if="editing" variant="secondary" @click="$emit('cancel')">Cancel</AppButton>
     </div>
   </form>
+
+  <CreateChannelModal :open="showCreateChannel" @close="onModalClose" @created="onChannelCreated" />
 </template>
 
 <script setup>
-import { reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppButton from "@/components/common/AppButton.vue";
+import CreateChannelModal from "./CreateChannelModal.vue";
+import { getChannels } from "@/api/campaignApi";
 
 const props = defineProps({
   editing: Boolean,
@@ -75,10 +88,47 @@ const props = defineProps({
 });
 const emit = defineEmits(["submit", "cancel"]);
 
-const channels = ["instagram", "email", "tiktok", "linkedin"];
-const formats = ["VideoAd", "CarouselPost", "EmailNewsletter", "ShortFormVideo", "SponsoredPost"];
+const channels = ref([]);
+const loadingChannels = ref(false);
+const showCreateChannel = ref(false);
 const tones = ["playful", "professional", "urgent", "neutral"];
 const errors = ref([]);
+
+const selectedChannel = computed(() => channels.value.find((c) => c.key === form.channel) || null);
+const availableFormats = computed(() => selectedChannel.value?.formats || []);
+const channelDefaultRounds = computed(() => selectedChannel.value?.mechanics?.max_rounds_default || null);
+
+async function loadChannels() {
+  loadingChannels.value = true;
+  try {
+    channels.value = await getChannels();
+  } catch {
+    channels.value = [];
+  } finally {
+    loadingChannels.value = false;
+  }
+}
+
+function onChannelChange() {
+  if (form.channel === "__create_custom__") {
+    form.channel = "";
+    showCreateChannel.value = true;
+    return;
+  }
+  // Format may no longer be valid for the newly selected channel.
+  if (form.format && !availableFormats.value.includes(form.format)) {
+    form.format = "";
+  }
+}
+
+function onModalClose() {
+  showCreateChannel.value = false;
+}
+
+function onChannelCreated(channel) {
+  channels.value.push(channel);
+  form.channel = channel.key;
+}
 
 const emptyForm = () => ({
   variant_name: "",
@@ -91,7 +141,7 @@ const emptyForm = () => ({
   email_subject: "",
   tone: "neutral",
   target_segment: "",
-  max_rounds: 10,
+  max_rounds: null,
 });
 
 const form = reactive(emptyForm());
@@ -120,8 +170,10 @@ function validate() {
   ["variant_name", "channel", "format", "headline", "body", "cta"].forEach((field) => {
     if (!form[field]) next.push(`${field.replace("_", " ")} is required.`);
   });
-  if (form.channel === "email" && !form.email_subject) next.push("email subject is required for email.");
-  if (Number(form.max_rounds) < 1 || Number(form.max_rounds) > 50) {
+  if (selectedChannel.value?.kind === "direct" && !form.email_subject) {
+    next.push("subject is required for this channel.");
+  }
+  if (form.max_rounds != null && (Number(form.max_rounds) < 1 || Number(form.max_rounds) > 50)) {
     next.push("max rounds must be between 1 and 50.");
   }
   errors.value = next;
@@ -130,8 +182,11 @@ function validate() {
 
 function submit() {
   if (!validate()) return;
-  emit("submit", { ...form });
+  // null max_rounds -> let the backend fall back to the channel's own default.
+  emit("submit", { ...form, max_rounds: form.max_rounds || 0 });
   hydrate(null);
   errors.value = [];
 }
+
+onMounted(loadChannels);
 </script>

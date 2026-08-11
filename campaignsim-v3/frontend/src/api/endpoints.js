@@ -39,4 +39,8 @@ export const endpoints = {
   reportInterview: "/api/report/interview",
 
   suggestBrandIntel: "/api/ai/suggest",
+
+  channels: "/api/channels",
+  channelDraft: "/api/channels/draft",
+  channelById: (channelId) => `/api/channels/${channelId}`,
 };

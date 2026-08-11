@@ -115,3 +115,19 @@ export async function getHistory() {
 export async function suggestBrandIntel(payload) {
   return unwrap(await apiClient.post(endpoints.suggestBrandIntel, payload));
 }
+
+export async function getChannels() {
+  return unwrap(await apiClient.get(endpoints.channels));
+}
+
+export async function draftChannel(payload) {
+  return unwrap(await apiClient.post(endpoints.channelDraft, payload));
+}
+
+export async function createChannel(payload) {
+  return unwrap(await apiClient.post(endpoints.channels, payload));
+}
+
+export async function deleteChannel(channelId) {
+  return unwrap(await apiClient.delete(endpoints.channelById(channelId)));
+}

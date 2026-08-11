@@ -210,23 +210,26 @@ class SimulationManager:
         defined_entity_types: Optional[List[str]] = None,
         use_llm_for_profiles: bool = True,
         progress_callback: Optional[callable] = None,
-        parallel_profile_count: int = 3
+        parallel_profile_count: int = 3,
+        fan_out: int = 1,
     ) -> SimulationState:
         """        1. Zep
         2. OASIS Agent ProfileLLM
         3. LLM
         4. Profile
-        5. 
-        
+        5.
+
         Args:
             simulation_id: ID
             simulation_requirement: LLM
             document_text: DocumentLLM
-            defined_entity_types: 
+            defined_entity_types:
             use_llm_for_profiles: LLM
             progress_callback:  (stage, progress, message)
             parallel_profile_count: 3
-            
+            fan_out: distinct personas generated per individual/audience entity
+                (population fan-out); brand/channel entities always stay 1:1
+
         Returns:
             SimulationState"""
         state = self._load_simulation_state(simulation_id)
@@ -282,8 +285,19 @@ class SimulationManager:
                     total=total_entities
                 )
             
+            # Resolve business_type from the brand brief backing this project,
+            # if any, to steer persona-generation guidance (see business_context.py).
+            business_type = None
+            try:
+                from ..models.orm import BrandBrief
+                brief = BrandBrief.query.filter_by(project_id=state.project_id).first()
+                if brief:
+                    business_type = brief.business_type
+            except Exception as e:
+                logger.warning(f"Could not resolve business_type for project {state.project_id}: {e}")
+
             # graph_idZep
-            generator = OasisProfileGenerator(graph_id=state.graph_id)
+            generator = OasisProfileGenerator(graph_id=state.graph_id, business_type=business_type)
             
             def profile_progress(current, total, msg):
                 if progress_callback:
@@ -313,7 +327,8 @@ class SimulationManager:
                 graph_id=state.graph_id,  # graph_idZep
                 parallel_count=parallel_profile_count,
                 realtime_output_path=realtime_output_path,
-                output_platform=realtime_platform
+                output_platform=realtime_platform,
+                fan_out=fan_out,
             )
             
             state.profiles_count = len(profiles)

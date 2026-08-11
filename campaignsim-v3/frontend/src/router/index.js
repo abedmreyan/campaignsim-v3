@@ -7,13 +7,39 @@ import Step4Report from "@/views/Step4Report.vue";
 import Step5Interaction from "@/views/Step5Interaction.vue";
 import HistoryDatabase from "@/views/HistoryDatabase.vue";
 import CampaignReportView from "@/views/CampaignReportView.vue";
+import DesignerSessionView from "@/views/DesignerSessionView.vue";
+import IterationCompareView from "@/views/IterationCompareView.vue";
+import DataView from "@/views/DataView.vue";
+import SegmentsView from "@/views/SegmentsView.vue";
+import LoginView from "@/views/LoginView.vue";
+import SignupView from "@/views/SignupView.vue";
+import BrandBriefView from "@/views/BrandBriefView.vue";
 import { useCampaignStore } from "@/stores/campaignStore";
+import { useAuthStore } from "@/stores/authStore";
+import { isMockMode } from "@/api/campaignApi";
+
+const PUBLIC_ROUTE_NAMES = new Set(["home", "login", "signup"]);
 
 const routes = [
   {
     path: "/",
     name: "home",
     component: Home,
+  },
+  {
+    path: "/login",
+    name: "login",
+    component: LoginView,
+  },
+  {
+    path: "/signup",
+    name: "signup",
+    component: SignupView,
+  },
+  {
+    path: "/briefs",
+    name: "briefs",
+    component: BrandBriefView,
   },
   {
     path: "/process",
@@ -50,6 +76,26 @@ const routes = [
     name: "CampaignReport",
     component: CampaignReportView,
   },
+  {
+    path: "/campaign/:campaignId/iterations",
+    name: "IterationCompare",
+    component: IterationCompareView,
+  },
+  {
+    path: "/designer/sessions/:sessionId",
+    name: "designer-session",
+    component: DesignerSessionView,
+  },
+  {
+    path: "/audience/data",
+    name: "audience-data",
+    component: DataView,
+  },
+  {
+    path: "/audience/segments",
+    name: "audience-segments",
+    component: SegmentsView,
+  },
 ];
 
 const router = createRouter({
@@ -58,10 +104,33 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  // Mock mode is a sandboxed, backend-free demo — auth doesn't apply.
+  if (!isMockMode && !PUBLIC_ROUTE_NAMES.has(to.name)) {
+    const auth = useAuthStore();
+
+    if (!auth.checkedSession) {
+      await auth.fetchMe();
+    }
+
+    if (!auth.isAuthenticated) {
+      return { name: "login", query: { redirect: to.fullPath } };
+    }
+  }
+
+  if (!isMockMode && ["login", "signup"].includes(to.name)) {
+    const auth = useAuthStore();
+    if (!auth.checkedSession) {
+      await auth.fetchMe();
+    }
+    if (auth.isAuthenticated) {
+      return { name: "briefs" };
+    }
+  }
+
   const store = useCampaignStore();
-  if (to.name === "simulation-run" && store.variants.length < 2) {
-    store.setNotice("Create at least two campaign variants before starting a simulation.");
+  if (to.name === "simulation-run" && store.variants.length < 1) {
+    store.setNotice("Create at least one campaign variant before starting a simulation.");
     return { name: "process" };
   }
 

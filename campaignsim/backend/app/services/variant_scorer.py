@@ -2,12 +2,16 @@
 CampaignSim Variant Scorer
 
 Reads simulation action logs and computes engagement metrics per variant.
-Uses CAMPAIGN_ACTION_WEIGHTS from config to score each action type.
+
+Weights and funnel classification come from the channel registry definition
+written into each variant's simulation_config.json (the "channel_def" block —
+see VariantRunner). Falls back to Config.CAMPAIGN_ACTION_WEIGHTS for variants
+run before the Phase 1 channel registry existed (no channel_def present).
 """
 
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from collections import defaultdict
 
 from ..config import Config
@@ -33,10 +37,12 @@ class VariantScorer:
 
         File format:
             Each line in actions.jsonl is:
-              {"variant_id": "...", "channel": "...", "agent_id": 1,
-               "action_type": "LIKE_POST", "info": {...}, "timestamp": "..."}
-            Action type strings are OASIS ActionType names matching keys in
-            Config.CAMPAIGN_ACTION_WEIGHTS.
+              {"variant_id": "...", "channel": "...", "round_num": 3, "agent_id": 1,
+               "action_type": "like_post", "info": {...}, "timestamp": "..."}
+            action_type is the raw OASIS ActionType.value string (lowercase
+            snake_case), matching action_weights keys from the channel_def.
+            round_num is present on all variants run after the Phase 1 channel
+            registry landed; older variants fall back to a 5-slice approximation.
         """
         actions_file = os.path.join(variant_output_dir, "actions.jsonl")
 
@@ -54,15 +60,27 @@ class VariantScorer:
                 "per_round_engagement": [],
                 "per_agent_scores": {},
                 "trend": "flat",
+                "funnel": {},
             }
 
-        # Read num_rounds from simulation_config so normalisation is correct
         num_rounds = self._read_num_rounds(variant_output_dir)
+        channel_def = self._read_channel_def(variant_output_dir)
+        base_weights = (channel_def or {}).get("action_weights") or Config.CAMPAIGN_ACTION_WEIGHTS
+        funnel_map = (channel_def or {}).get("funnel_map") or {}
 
-        weights = Config.CAMPAIGN_ACTION_WEIGHTS
+        # Apply the campaign's objective as a per-funnel-tier multiplier on
+        # top of the channel's base weights — e.g. a "conversion" objective
+        # amplifies intent-tier actions (follow, purchase_product) relative
+        # to attention-tier ones (like), without changing which actions are
+        # available or how the channel itself is scored in isolation.
+        objective = self._read_objective(variant_output_dir)
+        weights = self._apply_objective_emphasis(base_weights, funnel_map, objective)
+
         total_agents: set = set()
         action_counts: Dict[str, int] = defaultdict(int)
         per_agent: Dict[int, float] = defaultdict(float)
+        per_round_scores: Dict[int, List[float]] = defaultdict(list)
+        has_real_round_num = False
         all_records: List[Dict] = []
 
         with open(actions_file, "r", encoding="utf-8") as f:
@@ -81,7 +99,7 @@ class VariantScorer:
                     continue
 
                 agent_id = record.get("agent_id")
-                action_type = record.get("action_type", "DO_NOTHING")
+                action_type = record.get("action_type", "do_nothing")
 
                 if agent_id is not None:
                     total_agents.add(agent_id)
@@ -89,16 +107,30 @@ class VariantScorer:
                 weight = weights.get(action_type, 0.0)
                 if agent_id is not None:
                     per_agent[agent_id] += weight
+
+                # round_num 0 is the brand's own initial post — exclude it
+                # from the persona-engagement-by-round series.
+                round_num = record.get("round_num")
+                if isinstance(round_num, int) and round_num >= 1:
+                    has_real_round_num = True
+                    per_round_scores[round_num].append(weight)
+
                 all_records.append(record)
 
-        # Per-round breakdown — split records into 5 equal time-slices
+        # Per-round breakdown: real round_num grouping when available (any
+        # variant run after the Phase 1 channel registry), else the old
+        # 5-slice approximation for pre-existing variants.
         per_round: List[float] = []
-        if all_records:
+        if has_real_round_num:
+            for r in range(1, num_rounds + 1):
+                scores = per_round_scores.get(r, [])
+                per_round.append(sum(scores) / len(scores) if scores else 0.0)
+        elif all_records:
             chunk_size = max(1, len(all_records) // 5)
             for i in range(0, len(all_records), chunk_size):
                 chunk = all_records[i: i + chunk_size]
                 chunk_score = sum(
-                    weights.get(r.get("action_type", "DO_NOTHING"), 0.0)
+                    weights.get(r.get("action_type", "do_nothing"), 0.0)
                     for r in chunk
                 )
                 per_round.append(chunk_score / len(chunk) if chunk else 0.0)
@@ -125,6 +157,8 @@ class VariantScorer:
                 "declining" if per_round[-1] < per_round[0] else "flat"
             )
 
+        funnel = self._compute_funnel(action_counts, funnel_map, total_actions)
+
         return {
             **variant_meta,
             "status": "scored",
@@ -138,6 +172,51 @@ class VariantScorer:
             "per_round_engagement": [round(x, 4) for x in per_round],
             "per_agent_scores": {str(k): round(v, 4) for k, v in per_agent.items()},
             "trend": trend,
+            "funnel": funnel,
+        }
+
+    @staticmethod
+    def _compute_funnel(
+        action_counts: Dict[str, int], funnel_map: Dict[str, List[str]], total_actions: int
+    ) -> Dict[str, float]:
+        """
+        Classify observed actions into funnel tiers (attention, engagement,
+        amplification, intent) using the channel's funnel_map, expressed as a
+        percentage of all actions. Returns {} when there's no funnel_map
+        (legacy variants) or no actions to classify.
+        """
+        if not funnel_map or total_actions == 0:
+            return {}
+        funnel = {}
+        for tier in ("attention", "engagement", "amplification", "intent"):
+            tier_actions = funnel_map.get(tier) or []
+            tier_count = sum(action_counts.get(a, 0) for a in tier_actions)
+            funnel[f"{tier}_pct"] = round(tier_count / total_actions * 100, 2)
+        return funnel
+
+    @staticmethod
+    def _apply_objective_emphasis(
+        base_weights: Dict[str, float], funnel_map: Dict[str, List[str]], objective: Optional[str]
+    ) -> Dict[str, float]:
+        """
+        Multiply each action's base weight by its funnel tier's emphasis for
+        the given campaign objective (1.0 for every tier, i.e. a no-op, when
+        objective is unset/unrecognised or the channel has no funnel_map).
+        """
+        from .business_context import funnel_emphasis
+
+        if not funnel_map or not objective:
+            return dict(base_weights)
+
+        action_to_tier: Dict[str, str] = {}
+        for tier, actions in funnel_map.items():
+            for action in actions or []:
+                action_to_tier[action] = tier
+
+        emphasis = funnel_emphasis(objective)
+        return {
+            action: weight * emphasis.get(action_to_tier.get(action, ""), 1.0)
+            for action, weight in base_weights.items()
         }
 
     def score_campaign(self, campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -192,3 +271,29 @@ class VariantScorer:
             except (json.JSONDecodeError, ValueError):
                 pass
         return 10
+
+    @staticmethod
+    def _read_channel_def(variant_output_dir: str) -> Optional[Dict[str, Any]]:
+        """Read the channel_def block from simulation_config.json, if present."""
+        config_path = os.path.join(variant_output_dir, "simulation_config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                return cfg.get("channel_def")
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return None
+
+    @staticmethod
+    def _read_objective(variant_output_dir: str) -> Optional[str]:
+        """Read campaign_meta.objective from simulation_config.json, if present."""
+        config_path = os.path.join(variant_output_dir, "simulation_config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                return (cfg.get("campaign_meta") or {}).get("objective") or None
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return None

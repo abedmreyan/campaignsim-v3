@@ -34,3 +34,15 @@ chardet>=5.0.0
 # Utilities
 python-dotenv>=1.0.0
 pydantic>=2.0.0
+
+# Platform database + auth (Phase 0)
+flask-sqlalchemy>=3.1
+flask-migrate>=4.0
+psycopg2-binary>=2.9
+bcrypt>=4.0
+pyjwt>=2.8
+flask-limiter>=3.5
+
+# Dataset intake + segmentation (Phase 4)
+pandas>=2.0.0
+openpyxl>=3.1.0

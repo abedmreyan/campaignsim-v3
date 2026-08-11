@@ -1,41 +1,67 @@
-"""Simulation API routes
-Step2: Zep entity read/filter, OASIS simulation prep and run (fully automated)"""
+"""Simulation core API routes — lifecycle, preparation, profiles, config, run status.
+
+Split from the former monolithic simulation.py (Phase 0 restructure). Behavior
+is unchanged; routes still live under /api/simulation via the shared
+simulation_bp blueprint (see interviews.py, campaigns.py, segments.py for the
+rest of the former file)."""
 
 import json
 import os
 import traceback
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, g
 
 from . import simulation_bp
 from ..config import Config
+from ..extensions import db
+from ..models.orm import SimulationRecord, BrandBrief
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
-from ..services.simulation_runner import SimulationRunner, RunnerStatus
+from ..services.simulation_runner import SimulationRunner
+from ..services.simulation_helpers import _check_simulation_prepared, _get_report_id_for_simulation
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
+from ..utils.ownership import user_owns_graph, user_owns_simulation, user_owns_campaign
 from ..models.project import ProjectManager
 
 logger = get_logger('campaignsim.api.simulation')
 
-# Interview prompt
-# Agent
-INTERVIEW_PROMPT_PREFIX = ""
 
-def optimize_interview_prompt(prompt: str) -> str:
-    """    InterviewAgent
-    
-    Args:
-        prompt: 
-        
-    Returns:"""
-    if not prompt:
-        return prompt
-    if prompt.startswith(INTERVIEW_PROMPT_PREFIX):
-        return prompt
-    return f"{INTERVIEW_PROMPT_PREFIX}{prompt}"
+@simulation_bp.before_request
+def _enforce_simulation_ownership():
+    """Per-user data isolation for every route on the shared simulation_bp.
 
-# ==============  ==============
+    IDs may arrive as URL path params or JSON body fields depending on the
+    route; both are checked. A resource being newly created (its id absent
+    from the request, generated inside the handler) is naturally exempt since
+    there is nothing yet to look up. `variant_sim_id` is a composite
+    "{simulation_id}__{variant_id}" — ownership is resolved via its
+    simulation_id prefix.
+    """
+    view_args = request.view_args or {}
+    body = request.get_json(silent=True) if request.is_json else None
+    body = body or {}
+
+    simulation_id = view_args.get('simulation_id') or body.get('simulation_id')
+    variant_sim_id = view_args.get('variant_sim_id')
+    if not simulation_id and variant_sim_id and '__' in variant_sim_id:
+        simulation_id = variant_sim_id.split('__', 1)[0]
+
+    if simulation_id and not user_owns_simulation(g.current_user, simulation_id):
+        return jsonify({"success": False, "error": "Simulation not found"}), 404
+
+    campaign_id = view_args.get('campaign_id') or body.get('campaign_id')
+    if campaign_id and not user_owns_campaign(g.current_user, campaign_id):
+        return jsonify({"success": False, "error": "Campaign not found"}), 404
+
+    graph_id = view_args.get('graph_id') or body.get('graph_id')
+    if graph_id and not user_owns_graph(g.current_user, graph_id):
+        return jsonify({"success": False, "error": "Graph not found"}), 404
+
+    return None
+
+
+# ============== Entity endpoints ==============
 
 @simulation_bp.route('/entities/<graph_id>', methods=['GET'])
 def get_graph_entities(graph_id: str):
@@ -77,6 +103,8 @@ def get_graph_entities(graph_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
 def get_entity_detail(graph_id: str, entity_uuid: str):
     """..."""
@@ -108,6 +136,8 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
 def get_entities_by_type(graph_id: str, entity_type: str):
@@ -147,6 +177,8 @@ def get_entities_by_type(graph_id: str, entity_type: str):
 
 # ==============  ==============
 
+
+
 @simulation_bp.route('/create', methods=['POST'])
 def create_simulation():
     """    max_roundsLLM
@@ -181,20 +213,35 @@ def create_simulation():
                 "error": t('api.requireProjectId')
             }), 400
         
+        owning_brief = BrandBrief.query.filter_by(
+            user_id=g.current_user.id, project_id=project_id
+        ).first()
+        if not owning_brief:
+            return jsonify({
+                "success": False,
+                "error": t('api.projectNotFound', id=project_id)
+            }), 404
+
         project = ProjectManager.get_project(project_id)
         if not project:
             return jsonify({
                 "success": False,
                 "error": t('api.projectNotFound', id=project_id)
             }), 404
-        
+
         graph_id = data.get('graph_id') or project.graph_id
         if not graph_id:
             return jsonify({
                 "success": False,
                 "error": t('api.graphNotBuilt')
             }), 400
-        
+
+        if not user_owns_graph(g.current_user, graph_id):
+            return jsonify({
+                "success": False,
+                "error": t('api.graphNotBuilt')
+            }), 400
+
         manager = SimulationManager()
         state = manager.create_simulation(
             project_id=project_id,
@@ -202,7 +249,15 @@ def create_simulation():
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
         )
-        
+
+        db.session.add(SimulationRecord(
+            user_id=g.current_user.id,
+            brand_brief_id=owning_brief.id,
+            sim_key=state.simulation_id,
+            status='pending',
+        ))
+        db.session.commit()
+
         return jsonify({
             "success": True,
             "data": state.to_dict()
@@ -216,113 +271,7 @@ def create_simulation():
             "traceback": traceback.format_exc()
         }), 500
 
-def _check_simulation_prepared(simulation_id: str) -> tuple:
-    """    1. state.json  status  "ready"
-    2. reddit_profiles.json, twitter_profiles.csv, simulation_config.json
-    
-    (run_*.py) backend/scripts/ 
-    
-    Args:
-        simulation_id: ID
-        
-    Returns:
-        (is_prepared: bool, info: dict)"""
-    import os
-    from ..config import Config
-    
-    simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
-    
-    if not os.path.exists(simulation_dir):
-        return False, {"reason": ""}
-    
-    #  backend/scripts/
-    required_files = [
-        "state.json",
-        "simulation_config.json",
-        "reddit_profiles.json",
-        "twitter_profiles.csv"
-    ]
-    
-    existing_files = []
-    missing_files = []
-    for f in required_files:
-        file_path = os.path.join(simulation_dir, f)
-        if os.path.exists(file_path):
-            existing_files.append(f)
-        else:
-            missing_files.append(f)
-    
-    if missing_files:
-        return False, {
-            "reason": "",
-            "missing_files": missing_files,
-            "existing_files": existing_files
-        }
-    
-    # state.json
-    state_file = os.path.join(simulation_dir, "state.json")
-    try:
-        import json
-        with open(state_file, 'r', encoding='utf-8') as f:
-            state_data = json.load(f)
-        
-        status = state_data.get("status", "")
-        config_generated = state_data.get("config_generated", False)
-        
-        logger.debug(f": {simulation_id}, status={status}, config_generated={config_generated}")
-        
-        #  config_generated=True
-        # - ready:
-        # - preparing:  config_generated=True
-        # - running:
-        # - completed:
-        # - stopped:
-        # - failed:
-        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed"]
-        if status in prepared_statuses and config_generated:
-            profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
-            config_file = os.path.join(simulation_dir, "simulation_config.json")
-            
-            profiles_count = 0
-            if os.path.exists(profiles_file):
-                with open(profiles_file, 'r', encoding='utf-8') as f:
-                    profiles_data = json.load(f)
-                    profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
-            
-            # preparingready
-            if status == "preparing":
-                try:
-                    state_data["status"] = "ready"
-                    from datetime import datetime
-                    state_data["updated_at"] = datetime.now().isoformat()
-                    with open(state_file, 'w', encoding='utf-8') as f:
-                        json.dump(state_data, f, ensure_ascii=False, indent=2)
-                    logger.info(f": {simulation_id} preparing -> ready")
-                    status = "ready"
-                except Exception as e:
-                    logger.warning(f": {e}")
-            
-            logger.info(f" {simulation_id} : (status={status}, config_generated={config_generated})")
-            return True, {
-                "status": status,
-                "entities_count": state_data.get("entities_count", 0),
-                "profiles_count": profiles_count,
-                "entity_types": state_data.get("entity_types", []),
-                "config_generated": config_generated,
-                "created_at": state_data.get("created_at"),
-                "updated_at": state_data.get("updated_at"),
-                "existing_files": existing_files
-            }
-        else:
-            logger.warning(f" {simulation_id} : (status={status}, config_generated={config_generated})")
-            return False, {
-                "reason": f" after config_generatedfalse: status={status}, config_generated={config_generated}",
-                "status": status,
-                "config_generated": config_generated
-            }
-            
-    except Exception as e:
-        return False, {"reason": f": {str(e)}"}
+
 
 @simulation_bp.route('/prepare', methods=['POST'])
 def prepare_simulation():
@@ -425,6 +374,7 @@ def prepare_simulation():
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
         parallel_profile_count = data.get('parallel_profile_count', 5)
+        fan_out = max(1, min(int(data.get('fan_out', 1) or 1), 20))
         
         # ==========  ==========
         # prepareAgent
@@ -531,7 +481,8 @@ def prepare_simulation():
                     defined_entity_types=entity_types_list,
                     use_llm_for_profiles=use_llm_for_profiles,
                     progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count
+                    parallel_profile_count=parallel_profile_count,
+                    fan_out=fan_out
                 )
                 
                 task_manager.complete_task(
@@ -578,6 +529,8 @@ def prepare_simulation():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/prepare/status', methods=['POST'])
 def get_prepare_status():
@@ -685,6 +638,8 @@ def get_prepare_status():
             "error": str(e)
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>', methods=['GET'])
 def get_simulation(simulation_id: str):
     """..."""
@@ -716,6 +671,8 @@ def get_simulation(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/list', methods=['GET'])
 def list_simulations():
     """    Query
@@ -740,60 +697,7 @@ def list_simulations():
             "traceback": traceback.format_exc()
         }), 500
 
-def _get_report_id_for_simulation(simulation_id: str) -> str:
-    """     simulation  report_id
-    
-     reports  simulation_id  report
-     created_at 
-    
-    Args:
-        simulation_id: ID
-        
-    Returns:
-        report_id  None"""
-    import json
-    from datetime import datetime
-    
-    # reports backend/uploads/reports
-    # __file__  app/api/simulation.py backend/
-    reports_dir = os.path.join(os.path.dirname(__file__), '../../uploads/reports')
-    if not os.path.exists(reports_dir):
-        return None
-    
-    matching_reports = []
-    
-    try:
-        for report_folder in os.listdir(reports_dir):
-            report_path = os.path.join(reports_dir, report_folder)
-            if not os.path.isdir(report_path):
-                continue
-            
-            meta_file = os.path.join(report_path, "meta.json")
-            if not os.path.exists(meta_file):
-                continue
-            
-            try:
-                with open(meta_file, 'r', encoding='utf-8') as f:
-                    meta = json.load(f)
-                
-                if meta.get("simulation_id") == simulation_id:
-                    matching_reports.append({
-                        "report_id": meta.get("report_id"),
-                        "created_at": meta.get("created_at", ""),
-                        "status": meta.get("status", "")
-                    })
-            except Exception:
-                continue
-        
-        if not matching_reports:
-            return None
-        
-        matching_reports.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return matching_reports[0].get("report_id")
-        
-    except Exception as e:
-        logger.warning(f" simulation {simulation_id} report : {e}")
-        return None
+
 
 @simulation_bp.route('/history', methods=['GET'])
 def get_simulation_history():
@@ -898,6 +802,8 @@ def get_simulation_history():
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/profiles', methods=['GET'])
 def get_simulation_profiles(simulation_id: str):
     """    Agent Profile
@@ -932,6 +838,8 @@ def get_simulation_profiles(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/<simulation_id>/profiles/realtime', methods=['GET'])
 def get_simulation_profiles_realtime(simulation_id: str):
@@ -1034,6 +942,8 @@ def get_simulation_profiles_realtime(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/<simulation_id>/config/realtime', methods=['GET'])
 def get_simulation_config_realtime(simulation_id: str):
@@ -1142,6 +1052,8 @@ def get_simulation_config_realtime(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/config', methods=['GET'])
 def get_simulation_config(simulation_id: str):
     """    LLM
@@ -1174,6 +1086,8 @@ def get_simulation_config(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/config/download', methods=['GET'])
 def download_simulation_config(simulation_id: str):
     """..."""
@@ -1201,6 +1115,8 @@ def download_simulation_config(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/script/<script_name>/download', methods=['GET'])
 def download_simulation_script(script_name: str):
@@ -1252,6 +1168,8 @@ def download_simulation_script(script_name: str):
 
 # ============== Profile ==============
 
+
+
 @simulation_bp.route('/generate-profiles', methods=['POST'])
 def generate_profiles():
     """Kick off async OASIS profile generation.
@@ -1296,6 +1214,11 @@ def generate_profiles():
                 requested_count = int(requested_count)
             except (TypeError, ValueError):
                 requested_count = None
+
+        # Resolve business_type up front (in the request context) so the
+        # background thread doesn't need Flask's request-scoped `g`.
+        owning_brief_for_graph = BrandBrief.query.filter_by(graph_id=graph_id).first()
+        business_type = owning_brief_for_graph.business_type if owning_brief_for_graph else None
 
         # Quick entity count check before spawning the thread
         reader = ZepEntityReader()
@@ -1357,7 +1280,7 @@ def generate_profiles():
                         message=f"Generated {current}/{total} personas"
                     )
 
-                generator = OasisProfileGenerator()
+                generator = OasisProfileGenerator(business_type=business_type)
                 profiles = generator.generate_profiles_from_entities(
                     entities=entities_to_use,
                     use_llm=use_llm,
@@ -1421,6 +1344,7 @@ def generate_profiles():
         }), 500
 
 
+
 @simulation_bp.route('/generate-profiles/status', methods=['GET'])
 def get_generate_profiles_status():
     """Poll profile generation task status.
@@ -1441,6 +1365,8 @@ def get_generate_profiles_status():
     return jsonify({"success": True, "data": task.to_dict()})
 
 # ==============  ==============
+
+
 
 @simulation_bp.route('/start', methods=['POST'])
 def start_simulation():
@@ -1617,6 +1543,8 @@ def start_simulation():
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/stop', methods=['POST'])
 def stop_simulation():
     """    JSON
@@ -1671,6 +1599,8 @@ def stop_simulation():
 
 # ==============  ==============
 
+
+
 @simulation_bp.route('/<simulation_id>/run-status', methods=['GET'])
 def get_run_status(simulation_id: str):
     """        {
@@ -1722,6 +1652,8 @@ def get_run_status(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
 
 @simulation_bp.route('/<simulation_id>/run-status/detail', methods=['GET'])
 def get_run_status_detail(simulation_id: str):
@@ -1813,6 +1745,8 @@ def get_run_status_detail(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/actions', methods=['GET'])
 def get_simulation_actions(simulation_id: str):
     """    Agent
@@ -1863,6 +1797,8 @@ def get_simulation_actions(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/timeline', methods=['GET'])
 def get_simulation_timeline(simulation_id: str):
     """    Query
@@ -1894,6 +1830,8 @@ def get_simulation_timeline(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/agent-stats', methods=['GET'])
 def get_agent_stats(simulation_id: str):
     """    Agent
@@ -1919,6 +1857,8 @@ def get_agent_stats(simulation_id: str):
         }), 500
 
 # ==============  ==============
+
+
 
 @simulation_bp.route('/<simulation_id>/posts', methods=['GET'])
 def get_simulation_posts(simulation_id: str):
@@ -1993,6 +1933,8 @@ def get_simulation_posts(simulation_id: str):
             "traceback": traceback.format_exc()
         }), 500
 
+
+
 @simulation_bp.route('/<simulation_id>/comments', methods=['GET'])
 def get_simulation_comments(simulation_id: str):
     """    Reddit
@@ -2066,1275 +2008,4 @@ def get_simulation_comments(simulation_id: str):
         }), 500
 
 # ============== Interview  ==============
-
-@simulation_bp.route('/interview', methods=['POST'])
-def interview_agent():
-    """    Agent
-
-    JSON
-        {
-            "simulation_id": "sim_xxxx",       // ID
-            "agent_id": 0,                     // Agent ID
-            "prompt": "",  // 
-            "platform": "twitter",             // twitter/reddit
-                                               // 
-            "timeout": 60                      // 60
-        }
-
-    platform
-        {
-            "success": true,
-            "data": {
-                "agent_id": 0,
-                "prompt": "",
-                "result": {
-                    "agent_id": 0,
-                    "prompt": "...",
-                    "platforms": {
-                        "twitter": {"agent_id": 0, "response": "...", "platform": "twitter"},
-                        "reddit": {"agent_id": 0, "response": "...", "platform": "reddit"}
-                    }
-                },
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }
-
-    platform
-        {
-            "success": true,
-            "data": {
-                "agent_id": 0,
-                "prompt": "",
-                "result": {
-                    "agent_id": 0,
-                    "response": "...",
-                    "platform": "twitter",
-                    "timestamp": "2025-12-08T10:00:00"
-                },
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-        
-        simulation_id = data.get('simulation_id')
-        agent_id = data.get('agent_id')
-        prompt = data.get('prompt')
-        platform = data.get('platform')  # twitter/reddit/None
-        timeout = data.get('timeout', 60)
-        
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-        
-        if agent_id is None:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireAgentId')
-            }), 400
-        
-        if not prompt:
-            return jsonify({
-                "success": False,
-                "error": t('api.requirePrompt')
-            }), 400
-        
-        # platform
-        if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": t('api.invalidInterviewPlatform')
-            }), 400
-        
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": t('api.envNotRunning')
-            }), 400
-        
-        # promptAgent
-        optimized_prompt = optimize_interview_prompt(prompt)
-        
-        result = SimulationRunner.interview_agent(
-            simulation_id=simulation_id,
-            agent_id=agent_id,
-            prompt=optimized_prompt,
-            platform=platform,
-            timeout=timeout
-        )
-
-        return jsonify({
-            "success": result.get("success", False),
-            "data": result
-        })
-        
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-        
-    except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": t('api.interviewTimeout', error=str(e))
-        }), 504
-        
-    except Exception as e:
-        logger.error(f"Interview failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-@simulation_bp.route('/interview/batch', methods=['POST'])
-def interview_agents_batch():
-    """    Agent
-
-    JSON
-        {
-            "simulation_id": "sim_xxxx",       // ID
-            "interviews": [                    // 
-                {
-                    "agent_id": 0,
-                    "prompt": "A",
-                    "platform": "twitter"      // Agent
-                },
-                {
-                    "agent_id": 1,
-                    "prompt": "B"  // platform
-                }
-            ],
-            "platform": "reddit",              // platform
-                                               // Agent
-            "timeout": 120                     // 120
-        }
-
-        {
-            "success": true,
-            "data": {
-                "interviews_count": 2,
-                "result": {
-                    "interviews_count": 4,
-                    "results": {
-                        "twitter_0": {"agent_id": 0, "response": "...", "platform": "twitter"},
-                        "reddit_0": {"agent_id": 0, "response": "...", "platform": "reddit"},
-                        "twitter_1": {"agent_id": 1, "response": "...", "platform": "twitter"},
-                        "reddit_1": {"agent_id": 1, "response": "...", "platform": "reddit"}
-                    }
-                },
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-
-        simulation_id = data.get('simulation_id')
-        interviews = data.get('interviews')
-        platform = data.get('platform')  # twitter/reddit/None
-        timeout = data.get('timeout', 120)
-
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-
-        if not interviews or not isinstance(interviews, list):
-            return jsonify({
-                "success": False,
-                "error": t('api.requireInterviews')
-            }), 400
-
-        # platform
-        if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": t('api.invalidInterviewPlatform')
-            }), 400
-
-        for i, interview in enumerate(interviews):
-            if 'agent_id' not in interview:
-                return jsonify({
-                    "success": False,
-                    "error": t('api.interviewListMissingAgentId', index=i+1)
-                }), 400
-            if 'prompt' not in interview:
-                return jsonify({
-                    "success": False,
-                    "error": t('api.interviewListMissingPrompt', index=i+1)
-                }), 400
-            # platform
-            item_platform = interview.get('platform')
-            if item_platform and item_platform not in ("twitter", "reddit"):
-                return jsonify({
-                    "success": False,
-                    "error": t('api.interviewListInvalidPlatform', index=i+1)
-                }), 400
-
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": t('api.envNotRunning')
-            }), 400
-
-        # promptAgent
-        optimized_interviews = []
-        for interview in interviews:
-            optimized_interview = interview.copy()
-            optimized_interview['prompt'] = optimize_interview_prompt(interview.get('prompt', ''))
-            optimized_interviews.append(optimized_interview)
-
-        result = SimulationRunner.interview_agents_batch(
-            simulation_id=simulation_id,
-            interviews=optimized_interviews,
-            platform=platform,
-            timeout=timeout
-        )
-
-        return jsonify({
-            "success": result.get("success", False),
-            "data": result
-        })
-
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-
-    except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": t('api.batchInterviewTimeout', error=str(e))
-        }), 504
-
-    except Exception as e:
-        logger.error(f"Interview failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-@simulation_bp.route('/interview/all', methods=['POST'])
-def interview_all_agents():
-    """     - Agent
-
-    JSON
-        {
-            "simulation_id": "sim_xxxx",            // ID
-            "prompt": "",  // Agent
-            "platform": "reddit",                   // twitter/reddit
-                                                    // Agent
-            "timeout": 180                          // 180
-        }
-
-        {
-            "success": true,
-            "data": {
-                "interviews_count": 50,
-                "result": {
-                    "interviews_count": 100,
-                    "results": {
-                        "twitter_0": {"agent_id": 0, "response": "...", "platform": "twitter"},
-                        "reddit_0": {"agent_id": 0, "response": "...", "platform": "reddit"},
-                        ...
-                    }
-                },
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-
-        simulation_id = data.get('simulation_id')
-        prompt = data.get('prompt')
-        platform = data.get('platform')  # twitter/reddit/None
-        timeout = data.get('timeout', 180)
-
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-
-        if not prompt:
-            return jsonify({
-                "success": False,
-                "error": t('api.requirePrompt')
-            }), 400
-
-        # platform
-        if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": t('api.invalidInterviewPlatform')
-            }), 400
-
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": t('api.envNotRunning')
-            }), 400
-
-        # promptAgent
-        optimized_prompt = optimize_interview_prompt(prompt)
-
-        result = SimulationRunner.interview_all_agents(
-            simulation_id=simulation_id,
-            prompt=optimized_prompt,
-            platform=platform,
-            timeout=timeout
-        )
-
-        return jsonify({
-            "success": result.get("success", False),
-            "data": result
-        })
-
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-
-    except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": t('api.globalInterviewTimeout', error=str(e))
-        }), 504
-
-    except Exception as e:
-        logger.error(f"Interview failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-@simulation_bp.route('/interview/history', methods=['POST'])
-def get_interview_history():
-    """    Interview
-
-    Interview
-
-    JSON
-        {
-            "simulation_id": "sim_xxxx",  // ID
-            "platform": "reddit",          // reddit/twitter
-                                           // 
-            "agent_id": 0,                 // Agent
-            "limit": 100                   // 100
-        }
-
-        {
-            "success": true,
-            "data": {
-                "count": 10,
-                "history": [
-                    {
-                        "agent_id": 0,
-                        "response": "...",
-                        "prompt": "",
-                        "timestamp": "2025-12-08T10:00:00",
-                        "platform": "reddit"
-                    },
-                    ...
-                ]
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-        
-        simulation_id = data.get('simulation_id')
-        platform = data.get('platform')
-        agent_id = data.get('agent_id')
-        limit = data.get('limit', 100)
-        
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-
-        history = SimulationRunner.get_interview_history(
-            simulation_id=simulation_id,
-            platform=platform,
-            agent_id=agent_id,
-            limit=limit
-        )
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "count": len(history),
-                "history": history
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Interview: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-@simulation_bp.route('/env-status', methods=['POST'])
-def get_env_status():
-    """    Interview
-
-    JSON
-        {
-            "simulation_id": "sim_xxxx"  // ID
-        }
-
-        {
-            "success": true,
-            "data": {
-                "simulation_id": "sim_xxxx",
-                "env_alive": true,
-                "twitter_available": true,
-                "reddit_available": true,
-                "message": "Interview"
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-        
-        simulation_id = data.get('simulation_id')
-        
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-
-        env_alive = SimulationRunner.check_env_alive(simulation_id)
-        
-        env_status = SimulationRunner.get_env_status_detail(simulation_id)
-
-        if env_alive:
-            message = t('api.envRunning')
-        else:
-            message = t('api.envNotRunningShort')
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "simulation_id": simulation_id,
-                "env_alive": env_alive,
-                "twitter_available": env_status.get("twitter_available", False),
-                "reddit_available": env_status.get("reddit_available", False),
-                "message": message
-            }
-        })
-
-    except Exception as e:
-        logger.error(f": {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-@simulation_bp.route('/close-env', methods=['POST'])
-def close_simulation_env():
-    """     /stop /stop 
-    
-    JSON
-        {
-            "simulation_id": "sim_xxxx",  // ID
-            "timeout": 30                  // 30
-        }
-    
-        {
-            "success": true,
-            "data": {
-                "message": "",
-                "result": {...},
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }"""
-    try:
-        data = request.get_json() or {}
-        
-        simulation_id = data.get('simulation_id')
-        timeout = data.get('timeout', 30)
-        
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": t('api.requireSimulationId')
-            }), 400
-        
-        result = SimulationRunner.close_simulation_env(
-            simulation_id=simulation_id,
-            timeout=timeout
-        )
-        
-        manager = SimulationManager()
-        state = manager.get_simulation(simulation_id)
-        if state:
-            state.status = SimulationStatus.COMPLETED
-            manager._save_simulation_state(state)
-        
-        return jsonify({
-            "success": result.get("success", False),
-            "data": result
-        })
-        
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-        
-    except Exception as e:
-        logger.error(f": {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-# ============== Phase 2 — Channel Variant Simulation ==============
-
-@simulation_bp.route('/launch_variant', methods=['POST'])
-def launch_variant():
-    """Launch a single channel variant simulation.
-
-    Creates a variant-specific simulation directory, writes the config,
-    copies the persona profiles CSV, and starts the channel simulation
-    subprocess via SimulationRunner.
-
-    Request body:
-    {
-        "simulation_id": "...",       // parent simulation ID (used to locate profiles)
-        "variant_id": "variant_0",    // unique ID for this variant run
-        "channel": "instagram",       // instagram | email | tiktok | linkedin
-        "campaign_content": "...",    // full campaign text with channel framing
-        "num_rounds": 10              // simulation rounds (default 10)
-    }
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "variant_sim_id": "...",
-            "simulation_dir": "..."
-        }
-    }
-    """
-    import shutil
-
-    try:
-        data = request.get_json() or {}
-
-        simulation_id = data.get("simulation_id")
-        if not simulation_id:
-            return jsonify({"success": False, "error": t("api.requireSimulationId")}), 400
-
-        variant_id = data.get("variant_id", "variant_0")
-        channel = data.get("channel", "instagram")
-        campaign_content = data.get("campaign_content", "")
-        num_rounds = int(data.get("num_rounds", 10))
-
-        if not campaign_content:
-            return jsonify({"success": False, "error": "campaign_content is required"}), 400
-
-        # Locate parent simulation dir (contains twitter_profiles.csv)
-        parent_sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
-        profiles_src = os.path.join(parent_sim_dir, "twitter_profiles.csv")
-        if not os.path.exists(profiles_src):
-            return jsonify({
-                "success": False,
-                "error": (
-                    f"twitter_profiles.csv not found in simulation {simulation_id}. "
-                    "Run /prepare first to generate persona profiles."
-                )
-            }), 400
-
-        # Create variant simulation directory
-        variant_sim_id = f"{simulation_id}__{variant_id}"
-        variant_sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, variant_sim_id)
-        os.makedirs(variant_sim_dir, exist_ok=True)
-
-        # Copy persona profiles to variant dir
-        profiles_dst = os.path.join(variant_sim_dir, "twitter_profiles.csv")
-        shutil.copy2(profiles_src, profiles_dst)
-
-        # Read parent config for agent list
-        parent_config_path = os.path.join(parent_sim_dir, "simulation_config.json")
-        agent_configs = []
-        if os.path.exists(parent_config_path):
-            with open(parent_config_path, "r", encoding="utf-8") as f:
-                parent_config = json.load(f)
-            raw_agents = parent_config.get("agent_configs", [])
-            agent_configs = [
-                {
-                    "agent_id": a.get("agent_id", a.get("user_id")),
-                    "activity_level": a.get("activity_level", 0.7),
-                }
-                for a in raw_agents
-                if a.get("agent_id", a.get("user_id")) is not None
-            ]
-
-        # Write variant simulation_config.json
-        variant_config = {
-            "simulation_id": variant_sim_id,
-            "variant_id": variant_id,
-            "channel": channel,
-            "num_rounds": num_rounds,
-            "brand_agent_id": 0,
-            "campaign_content": campaign_content,
-            "agent_configs": agent_configs,
-        }
-        variant_config_path = os.path.join(variant_sim_dir, "simulation_config.json")
-        with open(variant_config_path, "w", encoding="utf-8") as f:
-            json.dump(variant_config, f, indent=2, ensure_ascii=False)
-
-        # Launch via SimulationRunner (platform="channel" -> run_channel_simulation.py).
-        # Pass max_rounds so the runner's total_rounds tracks correctly (the variant
-        # config has no time_config key, so without this it defaults to 144 rounds).
-        state = SimulationRunner.start_simulation(
-            simulation_id=variant_sim_id,
-            platform="channel",
-            max_rounds=num_rounds,
-        )
-
-        logger.info(
-            f"Variant simulation launched: variant_sim_id={variant_sim_id}, "
-            f"channel={channel}, pid={state.process_pid}"
-        )
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "variant_sim_id": variant_sim_id,
-                "simulation_dir": variant_sim_dir,
-                "runner_status": state.runner_status,
-                "process_pid": state.process_pid,
-            }
-        })
-
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-    except Exception as e:
-        logger.error(f"launch_variant failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-@simulation_bp.route('/variant_status/<variant_sim_id>', methods=['GET'])
-def variant_status(variant_sim_id: str):
-    """Poll status of a running variant simulation.
-
-    Returns env_status.json contents plus the runner state.
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "runner_status": "running|completed|failed",
-            "env_status": {...},
-            "actions_count": 42
-        }
-    }
-    """
-    try:
-        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, variant_sim_id)
-        if not os.path.isdir(sim_dir):
-            return jsonify({
-                "success": False,
-                "error": f"Variant simulation not found: {variant_sim_id}"
-            }), 404
-
-        # Runner state
-        state = SimulationRunner.get_run_state(variant_sim_id)
-        runner_status = state.runner_status if state else "unknown"
-
-        # Script-written status file
-        env_status = {}
-        env_status_path = os.path.join(sim_dir, "env_status.json")
-        if os.path.exists(env_status_path):
-            with open(env_status_path, "r", encoding="utf-8") as f:
-                env_status = json.load(f)
-
-        # Count exported agent actions (exclude sentinel lines)
-        actions_count = 0
-        actions_path = os.path.join(sim_dir, "actions.jsonl")
-        if os.path.exists(actions_path):
-            with open(actions_path, "r", encoding="utf-8") as f:
-                actions_count = sum(
-                    1 for line in f
-                    if line.strip() and '"event_type"' not in line
-                )
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "variant_sim_id": variant_sim_id,
-                "runner_status": runner_status,
-                "env_status": env_status,
-                "actions_count": actions_count,
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"variant_status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-# ============== Phase 3 — A/B Testing & Campaign Variables ==============
-
-def _campaigns_dir() -> str:
-    """Directory where campaign JSON files are persisted."""
-    from ..config import Config
-    d = os.path.join(Config.UPLOAD_FOLDER, "campaigns")
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
-def _save_campaign(campaign) -> None:
-    path = os.path.join(_campaigns_dir(), f"{campaign.campaign_id}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(campaign.to_dict(), f, indent=2, ensure_ascii=False)
-
-
-def _load_campaign(campaign_id: str):
-    from ..models.campaign import Campaign
-    path = os.path.join(_campaigns_dir(), f"{campaign_id}.json")
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        return Campaign.from_dict(json.load(f))
-
-
-@simulation_bp.route('/ab_test', methods=['POST'])
-def start_ab_test():
-    """Start a multi-variant A/B simulation.
-
-    Builds a Campaign object from the request, launches all variants via
-    VariantRunner (each gets its own subprocess), and persists the campaign
-    so ab_status can poll it.
-
-    Request body:
-    {
-        "simulation_id": "sim_xxxx",   // parent sim that ran /prepare
-        "brand_name": "FreshBrew Coffee",
-        "campaign_goal": "Drive trial purchase",
-        "variants": [
-            {
-                "variant_name": "Video on Instagram",
-                "channel": "instagram",
-                "target_segment": "",
-                "max_rounds": 10,
-                "content": {
-                    "format": "VideoAd",
-                    "headline": "Zero Sugar. Zero Wait.",
-                    "body": "Ready in 30 seconds.",
-                    "cta": "Try it — 20% off",
-                    "visual_desc": "Fast-paced montage",
-                    "tone": "playful"
-                }
-            }
-        ]
-    }
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "campaign_id": "...",
-            "variants": [{"variant_id": "...", "variant_sim_id": "...", "status": "running"}]
-        }
-    }
-    """
-    from ..models.campaign import Campaign, CampaignVariant, CampaignContent
-    from ..services.variant_runner import VariantRunner
-
-    try:
-        data = request.get_json() or {}
-
-        simulation_id = data.get("simulation_id")
-        if not simulation_id:
-            return jsonify({"success": False, "error": t("api.requireSimulationId")}), 400
-
-        variants_data = data.get("variants", [])
-        if not variants_data:
-            return jsonify({"success": False, "error": "At least one variant is required"}), 400
-
-        # Build Campaign object
-        campaign = Campaign(
-            simulation_id=simulation_id,
-            brand_name=data.get("brand_name", ""),
-            campaign_goal=data.get("campaign_goal", ""),
-        )
-
-        for v_data in variants_data:
-            c = v_data.get("content", {})
-            content = CampaignContent(
-                format=c.get("format", "CarouselPost"),
-                headline=c.get("headline", ""),
-                body=c.get("body", ""),
-                cta=c.get("cta", ""),
-                visual_desc=c.get("visual_desc", ""),
-                email_subject=c.get("email_subject", ""),
-                tone=c.get("tone", "neutral"),
-            )
-            variant = CampaignVariant(
-                variant_name=v_data.get("variant_name", "Variant"),
-                channel=v_data.get("channel", "instagram"),
-                target_segment=v_data.get("target_segment", ""),
-                max_rounds=int(v_data.get("max_rounds", 10)),
-                content=content,
-            )
-            campaign.variants.append(variant)
-
-        # Launch all variants
-        runner = VariantRunner()
-        campaign = runner.launch_all(campaign)
-
-        # Persist campaign for polling
-        _save_campaign(campaign)
-
-        logger.info(
-            f"A/B test launched: campaign_id={campaign.campaign_id}, "
-            f"{len(campaign.variants)} variants"
-        )
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "campaign_id": campaign.campaign_id,
-                "variants": [
-                    {
-                        "variant_id": v.variant_id,
-                        "variant_name": v.variant_name,
-                        "channel": v.channel,
-                        "variant_sim_id": v.variant_sim_id,
-                        "status": v.status,
-                        "error": v.error,
-                    }
-                    for v in campaign.variants
-                ],
-            }
-        })
-
-    except FileNotFoundError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-    except Exception as e:
-        logger.error(f"start_ab_test failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-@simulation_bp.route('/ab_status/<campaign_id>', methods=['GET'])
-def ab_status(campaign_id: str):
-    """Poll the status of all variants in a campaign.
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "campaign_id": "...",
-            "total_variants": 3,
-            "completed": 2,
-            "failed": 0,
-            "all_done": false,
-            "variants": [
-                {
-                    "variant_id": "...",
-                    "variant_name": "...",
-                    "channel": "instagram",
-                    "variant_sim_id": "...",
-                    "runner_status": "running",
-                    "env_status": {"status": "running", "timestamp": "..."},
-                    "actions_count": 47
-                }
-            ]
-        }
-    }
-    """
-    from ..services.variant_runner import VariantRunner
-
-    try:
-        campaign = _load_campaign(campaign_id)
-        if campaign is None:
-            return jsonify({"success": False, "error": f"Campaign not found: {campaign_id}"}), 404
-
-        runner = VariantRunner()
-        status = runner.get_campaign_status(campaign)
-
-        return jsonify({"success": True, "data": status})
-
-    except Exception as e:
-        logger.error(f"ab_status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-@simulation_bp.route('/assign_segments', methods=['POST'])
-def assign_segments():
-    """Assign generated personas to named audience segments.
-
-    Reads twitter_profiles.csv from the simulation directory, classifies
-    each individual persona profile into the provided segments using LLM,
-    and saves a filtered CSV per segment back to the simulation directory.
-
-    Request body:
-    {
-        "simulation_id": "sim_xxxx",
-        "segments": [
-            {"name": "MillennialProfessionals", "description": "Age 28-38, urban, high income"},
-            {"name": "GenZConsumers", "description": "Age 18-26, digital natives, price-conscious"}
-        ]
-    }
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "segments": {
-                "MillennialProfessionals": 12,
-                "GenZConsumers": 8,
-                "Unassigned": 3
-            },
-            "profile_paths": {
-                "MillennialProfessionals": "/path/to/profiles_MillennialProfessionals.csv"
-            }
-        }
-    }
-    """
-    import csv as csv_module
-    from ..services.oasis_profile_generator import OasisProfileGenerator
-
-    try:
-        data = request.get_json() or {}
-        simulation_id = data.get("simulation_id")
-        segments_input = data.get("segments", [])
-
-        if not simulation_id:
-            return jsonify({"success": False, "error": t("api.requireSimulationId")}), 400
-        if not segments_input:
-            return jsonify({"success": False, "error": "segments list is required"}), 400
-
-        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
-        profiles_csv = os.path.join(sim_dir, "twitter_profiles.csv")
-
-        if not os.path.exists(profiles_csv):
-            return jsonify({
-                "success": False,
-                "error": f"twitter_profiles.csv not found for simulation {simulation_id}"
-            }), 400
-
-        # Read profiles as lightweight dicts (avoid re-running LLM generation)
-        with open(profiles_csv, "r", encoding="utf-8", newline="") as f:
-            reader = csv_module.DictReader(f)
-            rows = list(reader)
-            fieldnames = reader.fieldnames or list(rows[0].keys()) if rows else []
-
-        # Separate brand agent (user_id == 0) from personas
-        brand_rows = [r for r in rows if str(r.get("user_id", "")) == "0"]
-        persona_rows = [r for r in rows if str(r.get("user_id", "")) != "0"]
-
-        if not persona_rows:
-            return jsonify({"success": False, "error": "No persona profiles found (only brand agent)"}), 400
-
-        # Use OasisProfileGenerator for LLM-based classification
-        # We pass lightweight wrappers so assign_segments can access .name, .age, etc.
-        class _ProfileProxy:
-            def __init__(self, row):
-                self.name = row.get("name", "")
-                self.age = row.get("age", "")
-                self.profession = row.get("profession", "")
-                self.bio = row.get("bio", "")
-                self.interested_topics = row.get("interested_topics", "")
-                self._row = row
-
-        proxies = [_ProfileProxy(r) for r in persona_rows]
-
-        generator = OasisProfileGenerator()
-        segment_map = generator.assign_segments(proxies, segments_input)
-
-        # Save per-segment CSV files and collect counts
-        counts = {}
-        profile_paths = {}
-        for seg_name, seg_profiles in segment_map.items():
-            counts[seg_name] = len(seg_profiles)
-            if not seg_profiles:
-                continue
-            seg_rows = brand_rows + [p._row for p in seg_profiles]
-            seg_filename = f"profiles_{seg_name.replace(' ', '_')}.csv"
-            seg_path = os.path.join(sim_dir, seg_filename)
-            with open(seg_path, "w", encoding="utf-8", newline="") as f:
-                writer = csv_module.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(seg_rows)
-            profile_paths[seg_name] = seg_path
-            logger.info(f"Saved segment '{seg_name}': {len(seg_profiles)} personas -> {seg_path}")
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "simulation_id": simulation_id,
-                "segments": counts,
-                "profile_paths": profile_paths,
-            }
-        })
-
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-    except Exception as e:
-        logger.error(f"assign_segments failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-# ============== Phase 4 — Recommendation Engine ==============
-
-@simulation_bp.route('/campaign_recommendations', methods=['POST'])
-def generate_campaign_recommendations():
-    """
-    Score all simulation variants and generate a recommendation report.
-
-    Request:
-        { "campaign_id": "...", "graph_id": "..." }
-        graph_id is optional — used to enrich recommendations with brand context.
-
-    Returns:
-        { "success": true, "data": { "task_id": "..." } }
-    """
-    import threading
-    from ..models.task import TaskManager, TaskStatus
-    from ..services.variant_scorer import VariantScorer
-    from ..services.campaign_report_agent import CampaignReportAgent
-
-    try:
-        data = request.get_json() or {}
-        campaign_id = data.get("campaign_id")
-        graph_id = data.get("graph_id")
-
-        if not campaign_id:
-            return jsonify({"success": False, "error": "campaign_id is required"}), 400
-
-        # Load as raw dict — _save_campaign wraps a Campaign object and can't store
-        # extra keys like campaign_report; use the JSON file directly instead.
-        campaign_path = os.path.join(_campaigns_dir(), f"{campaign_id}.json")
-        if not os.path.exists(campaign_path):
-            return jsonify({"success": False, "error": f"Campaign {campaign_id} not found"}), 404
-        with open(campaign_path, "r", encoding="utf-8") as f:
-            campaign_dict = json.load(f)
-
-        task_manager = TaskManager()
-        task_id = task_manager.create_task(
-            task_type="campaign_report",
-            metadata={"campaign_id": campaign_id},
-        )
-
-        def _run():
-            try:
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=10,
-                    message="Scoring simulation variants...",
-                )
-                scorer = VariantScorer()
-                scored = scorer.score_campaign(campaign_dict)
-
-                if not scored:
-                    task_manager.fail_task(task_id, "No completed variants with action logs found.")
-                    return
-
-                task_manager.update_task(
-                    task_id,
-                    progress=50,
-                    message=f"Scored {len(scored)} variants. Generating recommendations...",
-                )
-
-                from ..services.kg import KGClient as _KGClient
-                zep_client = _KGClient(data_dir=Config.KG_DATA_DIR) if graph_id else None
-
-                agent = CampaignReportAgent(
-                    scored_variants=scored,
-                    zep_client=zep_client,
-                    graph_id=graph_id,
-                )
-                result = agent.generate({
-                    "brand_name":    campaign_dict.get("brand_name", ""),
-                    "campaign_goal": campaign_dict.get("campaign_goal", ""),
-                })
-
-                # Persist report back into campaign JSON directly (bypasses Campaign.to_dict()
-                # which only serialises declared dataclass fields and would drop campaign_report)
-                campaign_dict["campaign_report"] = result
-                with open(campaign_path, "w", encoding="utf-8") as f:
-                    json.dump(campaign_dict, f, indent=2, ensure_ascii=False)
-
-                task_manager.complete_task(
-                    task_id,
-                    result={"campaign_id": campaign_id, "report_saved": True},
-                )
-
-            except Exception as e:
-                logger.error(f"Campaign recommendation generation failed: {e}")
-                task_manager.fail_task(task_id, str(e))
-
-        threading.Thread(target=_run, daemon=True).start()
-
-        return jsonify({"success": True, "data": {"task_id": task_id}})
-
-    except Exception as e:
-        logger.error(f"campaign_recommendations endpoint failed: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }), 500
-
-
-@simulation_bp.route('/campaign_report/<campaign_id>', methods=['GET'])
-def get_campaign_report(campaign_id: str):
-    """
-    Retrieve the generated campaign recommendation report.
-
-    Returns the full report dict saved inside the campaign JSON, plus
-    pre-computed scored_variants for the UI ranking table.
-
-    Query params:
-        format=markdown  — return only the report_text as plain text
-    """
-    try:
-        campaign_path = os.path.join(_campaigns_dir(), f"{campaign_id}.json")
-        if not os.path.exists(campaign_path):
-            return jsonify({"success": False, "error": f"Campaign {campaign_id} not found"}), 404
-        with open(campaign_path, "r", encoding="utf-8") as f:
-            campaign_dict = json.load(f)
-
-        report = campaign_dict.get("campaign_report")
-        if not report:
-            return jsonify({
-                "success": False,
-                "error": "No report generated yet. Call POST /campaign_recommendations first.",
-            }), 404
-
-        fmt = request.args.get("format", "json")
-        if fmt == "markdown":
-            from flask import Response
-            return Response(
-                report.get("report_text", "No report text."),
-                mimetype="text/markdown",
-                headers={
-                    "Content-Disposition": f"attachment; filename=campaign_report_{campaign_id}.md"
-                },
-            )
-
-        return jsonify({"success": True, "data": report})
-
-    except Exception as e:
-        logger.error(f"get_campaign_report failed: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }), 500
-
-
-@simulation_bp.route('/campaigns', methods=['GET'])
-def list_campaigns():
-    """List all past and active A/B campaigns for the history dashboard.
-
-    Returns campaigns sorted newest-first, each enriched with a derived
-    `overall_status` (pending / running / completed / failed) computed from
-    variant statuses.
-
-    Query params:
-        limit (int, default 50) — max campaigns to return
-    """
-    try:
-        limit = int(request.args.get("limit", 50))
-        campaigns_dir = _campaigns_dir()
-
-        items = []
-        for fname in os.listdir(campaigns_dir):
-            if not fname.endswith(".json"):
-                continue
-            path = os.path.join(campaigns_dir, fname)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                continue
-
-            variants = data.get("variants", [])
-            statuses = [v.get("status", "pending") for v in variants]
-
-            if all(s == "completed" for s in statuses):
-                overall_status = "completed"
-            elif any(s == "failed" for s in statuses):
-                overall_status = "failed"
-            elif any(s == "running" for s in statuses):
-                overall_status = "running"
-            else:
-                overall_status = "pending"
-
-            has_report = bool(data.get("campaign_report"))
-
-            items.append({
-                "campaign_id":   data.get("campaign_id"),
-                "simulation_id": data.get("simulation_id"),
-                "brand_name":    data.get("brand_name", ""),
-                "campaign_goal": data.get("campaign_goal", ""),
-                "created_at":    data.get("created_at"),
-                "variant_count": len(variants),
-                "variants":      [
-                    {
-                        "variant_id":   v.get("variant_id"),
-                        "variant_name": v.get("variant_name"),
-                        "channel":      v.get("channel"),
-                        "status":       v.get("status", "pending"),
-                    }
-                    for v in variants
-                ],
-                "overall_status": overall_status,
-                "has_report":    has_report,
-            })
-
-        items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-        items = items[:limit]
-
-        return jsonify({"success": True, "data": items, "total": len(items)})
-
-    except Exception as e:
-        logger.error(f"list_campaigns failed: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 

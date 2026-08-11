@@ -1,14 +1,33 @@
 """
 CampaignSim — Channel Simulation Script
 
-Runs an OASIS Twitter simulation where:
+Runs an OASIS Twitter-substrate simulation where:
 - Agent 0 (brand agent) posts the campaign content as the initial post
 - Persona agents (agents 1..N) react over num_rounds using LLMAction
-- Results are read from SQLite and exported as a JSONL action log
+- Results are logged live, per round, with real round numbers
+- A final reconciliation pass catches any trailing trace rows
 
 Usage:
     python run_channel_simulation.py --config /path/to/simulation_config.json
     python run_channel_simulation.py --config /path/to/simulation_config.json --no-wait
+
+Channel mechanics (from simulation_config.json's "channel_def" block, written
+by VariantRunner from the channel registry):
+- available_actions / action_weights / funnel_map are channel-specific real
+  OASIS ActionType.value strings (lowercase snake_case) — see CAMEL-AI OASIS's
+  ActionType enum (social_platform/typing.py) for the full valid vocabulary.
+- kind="feed": agents see and can react to the shared social graph (posts,
+  reposts, replies) — the platform's built-in recommendation feed, as before.
+- kind="direct": the channel has no sharing mechanic (email, SMS) — this is
+  enforced by the channel definition's available_actions simply not including
+  repost/quote_post/create_comment, so agents cannot amplify content into a
+  shared feed even though OASIS's underlying platform is still a single
+  shared substrate. NOTE: OASIS does not provide a private/isolated feed
+  primitive, so persona agents technically still query the same platform
+  recommendation system LLMAction always triggers; true per-recipient content
+  isolation would require running one isolated `oasis.make()` environment per
+  agent, which is a larger change deferred past this pass. This is a
+  documented approximation, not a silent gap.
 """
 
 import argparse
@@ -42,20 +61,36 @@ logger = logging.getLogger("campaignsim.channel_simulation")
 # Shutdown event — set by SIGTERM/SIGINT handler
 _shutdown_event: Optional[asyncio.Event] = None
 
-# Actions available to persona agents during simulation
-CAMPAIGN_AVAILABLE_ACTIONS = [
-    ActionType.CREATE_POST,  # comment / reply
-    ActionType.LIKE_POST,    # positive engagement
-    ActionType.REPOST,       # share campaign content
-    ActionType.QUOTE_POST,   # share with commentary
-    ActionType.FOLLOW,       # follow brand account
-    ActionType.DO_NOTHING,   # ignore / scroll past
+# Used only when a config has no channel_def block (legacy/back-compat).
+LEGACY_AVAILABLE_ACTIONS = [
+    ActionType.CREATE_POST,
+    ActionType.LIKE_POST,
+    ActionType.REPOST,
+    ActionType.QUOTE_POST,
+    ActionType.FOLLOW,
+    ActionType.DO_NOTHING,
 ]
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def resolve_available_actions(channel_def: Optional[Dict[str, Any]]) -> List[ActionType]:
+    """Convert a channel_def's available_actions (real ActionType.value strings,
+    e.g. "create_post") into ActionType enum members. Falls back to the legacy
+    fixed Twitter-style action set if no channel_def is present."""
+    if not channel_def or not channel_def.get("available_actions"):
+        return LEGACY_AVAILABLE_ACTIONS
+
+    resolved = []
+    for action_str in channel_def["available_actions"]:
+        try:
+            resolved.append(ActionType(action_str))
+        except ValueError:
+            logger.warning(f"Unknown action '{action_str}' in channel_def — skipping")
+    return resolved or LEGACY_AVAILABLE_ACTIONS
 
 
 def create_model(config: Dict[str, Any]):
@@ -99,39 +134,55 @@ def write_round_sentinel(actions_log_path: str, round_num: int, total_rounds: in
         f.write(json.dumps(sentinel) + "\n")
 
 
-def export_sqlite_to_jsonl(db_path: str, output_path: str, variant_id: str, channel: str):
+def export_new_trace_rows(
+    db_path: str,
+    output_path: str,
+    variant_id: str,
+    channel: str,
+    round_num: int,
+    since_rowid: int,
+) -> int:
     """
-    Read the OASIS trace table from SQLite and write a JSONL action log.
+    Append any trace rows with rowid > since_rowid to the JSONL action log,
+    tagged with the real round_num they occurred in.
 
-    Each line is one agent action:
+    Called after every env.step() so actions.jsonl reflects real, live,
+    per-round data — not a single end-of-run dump with a fake 5-slice
+    approximation. Returns the highest rowid seen (0 if none), so the caller
+    can advance its cursor.
+
+    Each line:
     {
-        "variant_id": "...",
-        "channel": "...",
-        "agent_id": 42,
-        "action_type": "LIKE_POST",
-        "info": {...},
+        "variant_id": "...", "channel": "...", "round_num": 3,
+        "agent_id": 42, "action_type": "like_post", "info": {...},
         "timestamp": "..."
     }
-
-    This is the format Phase 4's VariantScorer reads.
+    action_type is the raw OASIS ActionType.value string (lowercase snake_case)
+    — this MUST match the channel registry's action_weights keys exactly.
     """
     if not os.path.exists(db_path):
-        logger.warning(f"No simulation DB found at {db_path}")
-        return 0
+        return since_rowid
 
     conn = sqlite3.connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT user_id, action, info, created_at FROM trace ORDER BY created_at"
+            "SELECT rowid, user_id, action, info, created_at FROM trace "
+            "WHERE rowid > ? ORDER BY rowid",
+            (since_rowid,),
         ).fetchall()
     except sqlite3.OperationalError as e:
         logger.error(f"Failed to read trace table: {e}")
-        rows = []
+        return since_rowid
     finally:
         conn.close()
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        for user_id, action, info_json, created_at in rows:
+    if not rows:
+        return since_rowid
+
+    max_rowid = since_rowid
+    with open(output_path, "a", encoding="utf-8") as f:
+        for rowid, user_id, action, info_json, created_at in rows:
+            max_rowid = max(max_rowid, rowid)
             try:
                 info = json.loads(info_json) if info_json else {}
             except json.JSONDecodeError:
@@ -140,6 +191,7 @@ def export_sqlite_to_jsonl(db_path: str, output_path: str, variant_id: str, chan
             entry = {
                 "variant_id": variant_id,
                 "channel": channel,
+                "round_num": round_num,
                 "agent_id": user_id,
                 "action_type": action,
                 "info": info,
@@ -147,8 +199,7 @@ def export_sqlite_to_jsonl(db_path: str, output_path: str, variant_id: str, chan
             }
             f.write(json.dumps(entry) + "\n")
 
-    logger.info(f"Exported {len(rows)} actions to {output_path}")
-    return len(rows)
+    return max_rowid
 
 
 async def run_simulation(config_path: str):
@@ -158,12 +209,20 @@ async def run_simulation(config_path: str):
 
     variant_id = config.get("variant_id", "unknown")
     channel = config.get("channel", "instagram")
+    channel_def = config.get("channel_def") or {}
+    channel_kind = channel_def.get("kind", "feed")
     num_rounds = config.get("num_rounds", 10)
     brand_agent_id = config.get("brand_agent_id", 0)
     campaign_content = config.get("campaign_content", "")
     agent_configs = config.get("agent_configs", [])
 
-    print(f"Starting channel simulation: variant={variant_id}, channel={channel}, rounds={num_rounds}")
+    available_actions = resolve_available_actions(channel_def)
+
+    print(
+        f"Starting channel simulation: variant={variant_id}, channel={channel} "
+        f"(kind={channel_kind}), rounds={num_rounds}, "
+        f"actions={[a.value for a in available_actions]}"
+    )
     write_status(simulation_dir, "starting")
 
     # Build the model
@@ -181,7 +240,7 @@ async def run_simulation(config_path: str):
     agent_graph = await generate_twitter_agent_graph(
         profile_path=profile_path,
         model=model,
-        available_actions=CAMPAIGN_AVAILABLE_ACTIONS,
+        available_actions=available_actions,
     )
 
     # Environment (uses Twitter as the simulation substrate for all channels)
@@ -198,6 +257,11 @@ async def run_simulation(config_path: str):
     await env.reset()
     write_status(simulation_dir, "running")
 
+    # JSONL log path (appended live during simulation for real-time monitoring)
+    actions_log_path = os.path.join(simulation_dir, "actions.jsonl")
+    open(actions_log_path, "w").close()  # clear any previous log
+    trace_cursor = 0  # highest trace rowid already exported
+
     # Initial post: brand agent publishes campaign content
     if campaign_content:
         try:
@@ -207,6 +271,10 @@ async def run_simulation(config_path: str):
                 action_args={"content": campaign_content}
             )})
             print(f"Brand agent posted campaign content ({len(campaign_content)} chars)")
+            trace_cursor = export_new_trace_rows(
+                db_path, actions_log_path, variant_id, channel, round_num=0,
+                since_rowid=trace_cursor,
+            )
         except Exception as e:
             print(f"Warning: could not post initial campaign content: {e}")
 
@@ -228,11 +296,6 @@ async def run_simulation(config_path: str):
         return False
 
     print(f"Running {num_rounds} rounds with {len(persona_ids)} persona agents")
-
-    # JSONL log path (appended during simulation for live monitoring)
-    actions_log_path = os.path.join(simulation_dir, "actions.jsonl")
-    # Clear any previous log
-    open(actions_log_path, "w").close()
 
     # Main simulation loop
     start_time = datetime.now()
@@ -259,14 +322,28 @@ async def run_simulation(config_path: str):
         elapsed = (datetime.now() - start_time).total_seconds()
         print(f"Round {round_num + 1}/{num_rounds} — {len(actions)} agents active — {elapsed:.1f}s elapsed")
 
+        # Live export: real actions from this exact round, tagged with the
+        # real round_num — replaces the old end-of-run-only, fake 5-slice
+        # per_round_engagement approximation.
+        trace_cursor = export_new_trace_rows(
+            db_path, actions_log_path, variant_id, channel,
+            round_num=round_num + 1, since_rowid=trace_cursor,
+        )
+
         # Write round sentinel to log for live progress tracking
         write_round_sentinel(actions_log_path, round_num + 1, num_rounds)
 
     total_elapsed = (datetime.now() - start_time).total_seconds()
     print(f"Simulation loop done in {total_elapsed:.1f}s")
 
-    # Export full results from SQLite to JSONL
-    num_actions = export_sqlite_to_jsonl(db_path, actions_log_path, variant_id, channel)
+    # Reconciliation pass: catch any trailing rows not yet flushed (e.g. an
+    # in-flight action at the moment of an early shutdown). Uses the same
+    # cursor so nothing already exported is duplicated.
+    trace_cursor = export_new_trace_rows(
+        db_path, actions_log_path, variant_id, channel,
+        round_num=num_rounds, since_rowid=trace_cursor,
+    )
+    num_actions = trace_cursor  # rowid count is a reasonable proxy for total actions exported
 
     # Append simulation_end sentinel
     with open(actions_log_path, "a", encoding="utf-8") as f:

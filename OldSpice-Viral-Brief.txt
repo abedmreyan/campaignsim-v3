@@ -1,0 +1,69 @@
+OLD SPICE "THE MAN YOUR MAN COULD SMELL LIKE" — CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published case studies (Wieden+Kennedy, D&AD Awards case study, Ad Age, Kinesis, marketing press coverage, 2010)
+
+=== BRAND OVERVIEW ===
+
+Old Spice is a long-running men's grooming brand (body wash, deodorant, antiperspirant) that, by the late 2000s, had an aging brand image associated with older generations. In 2010, working with agency Wieden+Kennedy, Old Spice repositioned its Red Zone body wash line toward a younger male demographic while deliberately speaking to the women who often purchase grooming products for the household.
+
+Brand values (post-repositioning): Confidence, charm, self-aware absurdity, masculinity without machismo.
+Market positioning: Old Spice is no longer "your dad's brand" — it's bold, funny, and impossible to ignore.
+
+=== THE CAMPAIGN ===
+
+The campaign launched in two connected phases:
+1. A 30-second TV and digital spot, "The Man Your Man Could Smell Like," featuring actor Isaiah Mustafa delivering a rapid-fire, visually surreal direct-to-camera monologue aimed at women, about the kind of man their man could smell like if he used Old Spice.
+2. "The Old Spice Response Campaign" — a follow-up where Isaiah Mustafa, in character, filmed and posted real-time personalized video responses to questions and comments from fans, journalists, and celebrities on Twitter and Facebook, turning the campaign into a two-way, interactive event.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The Household Purchaser
+Age: 25–45 (primarily women).
+Psychographics: Buys grooming products for their household/partner, active on social media, enjoys sharing funny ads with friends.
+Platforms: Facebook, daytime TV, YouTube (via shared links).
+Buying behaviour: Influences or directly makes the purchase decision for their partner's grooming products.
+Ad response: Highly responsive to humor, charm, and ads that are "shareable" — content they want to send to friends, not just watch.
+
+Segment 2 — The Online Culture Participant
+Age: 18–34.
+Psychographics: Heavy social media user, follows internet culture and viral trends closely, enjoys being part of a real-time cultural moment.
+Platforms: Twitter, YouTube, Reddit, Facebook.
+Buying behaviour: Not necessarily the direct purchaser, but drives awareness and amplification through sharing, commenting, and creating derivative content/memes.
+Ad response: Responds strongly to novelty, interactivity, and content that reacts to them personally (e.g., a brand directly responding to their tweet).
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Reverse Old Spice's declining relevance among younger consumers and reposition Red Zone Body Wash as the leading men's body wash brand, while driving a measurable lift in body wash sales.
+
+Context: The original internal sales target for the campaign was modest. The campaign's actual mandate was to generate outsized cultural attention relative to a normal body-wash ad budget.
+
+Target metric: Body wash sales growth (year-over-year) and online video engagement (views, social follower growth) during the campaign window.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+Note: the original 2010 media plan ran on TV, YouTube, Twitter, and Facebook —
+platforms that predate or barely overlap with today's short-form social stack.
+The two variants below adapt the same creative concepts onto the channels this
+simulation actually models, as the modern equivalent placements a brand would
+choose to run this exact creative today.
+
+VARIANT A — "The Original Spot" (polished one-way video push)
+Headline: The Man Your Man Could Smell Like.
+Body: A single uninterrupted direct-to-camera monologue by a confident, charming man, moving through a series of surreal visual gags (boat, shower, hot air balloon, back to boat), aimed at the woman watching, ending with "I'm on a horse."
+CTA: (implicit) Buy Old Spice for your man.
+Target segment: Household Purchaser (Segment 1)
+Channel: Instagram
+Format: VideoAd
+
+VARIANT B — "The Response Campaign" (real-time interactive follow-up)
+Headline: Old Spice Guy is responding to YOU, right now.
+Body: Isaiah Mustafa, in character, films and posts individual short video replies to real questions and comments from fans, reacting within hours of the original post.
+CTA: Ask Old Spice Guy a question.
+Target segment: Online Culture Participant (Segment 2)
+Channel: TikTok
+Format: ShortFormVideo
+
+=== BRAND VOICE ===
+
+Tone: Confident, absurd, self-aware, fast-paced. Never takes itself seriously.
+We say things that are deliberately illogical and theatrical, owning the absurdity rather than explaining it.

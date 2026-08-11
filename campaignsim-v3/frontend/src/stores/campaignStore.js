@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import router from "@/router/index.js";
+import { useDesignerStore } from "@/stores/designerStore";
 import {
   createSimulationProject,
   uploadBrandBrief as uploadBriefApi,
@@ -58,8 +59,14 @@ function toApiVariant(variant) {
       tone: variant.content?.tone || variant.tone,
     },
     target_segment: variant.target_segment || "",
-    max_rounds: Number(variant.max_rounds || 10),
+    // 0 -> the backend falls back to the channel's own default round count.
+    max_rounds: Number(variant.max_rounds || 0),
     status: variant.status || "pending",
+    // Phase 2 — Designer agent provenance, preserved through edits so the
+    // launched campaign's variant rows record which ones were AI-proposed.
+    provenance: variant.provenance || "user",
+    rationale: variant.rationale || null,
+    hypothesis: variant.hypothesis || null,
   };
 }
 
@@ -96,6 +103,9 @@ export const useCampaignStore = defineStore("campaign", {
     },
 
     variants: readJson(VARIANTS_KEY, persistedState?.variants || []),
+    // "" | "awareness" | "conversion" | "retention" | "launch" — shapes which
+    // funnel tier VariantScorer emphasises when ranking variants.
+    campaignObjective: persistedState?.campaignObjective || "",
 
     simulationRun: {
       runId: persistedState?.simulationRun?.runId || null,
@@ -125,7 +135,7 @@ export const useCampaignStore = defineStore("campaign", {
   getters: {
     graphReady: (state) => state.graph.nodes.length > 0 && state.graph.edges.length > 0,
     personasReady: (state) => state.personas.items.length > 0,
-    canStartSimulation: (state) => state.variants.length >= 2 && state.variants.length <= 3,
+    canStartSimulation: (state) => state.variants.length >= 1 && state.variants.length <= 6,
     simulationCompleted: (state) => state.simulationRun.status === "completed",
     modeLabel: () => (import.meta.env.VITE_USE_MOCKS === "false" ? "Live API" : "Mock mode"),
     isMockMode: () => import.meta.env.VITE_USE_MOCKS !== "false",
@@ -174,8 +184,8 @@ export const useCampaignStore = defineStore("campaign", {
       if (state.currentStep === 2 && !state.personas.items.length) {
         return "Generate audience personas.";
       }
-      if (state.currentStep === 3 && state.variants.length < 2) {
-        return "Add at least two campaign variants.";
+      if (state.currentStep === 3 && state.variants.length < 1) {
+        return "Add at least one campaign variant.";
       }
       if (state.currentStep === 4 && !state.report.data) {
         return state.simulationCompleted ? "Generate insights report." : "Complete simulation first.";
@@ -187,7 +197,7 @@ export const useCampaignStore = defineStore("campaign", {
       let completed = 0;
       if (state.graphId && state.graph.nodes.length) completed += 1;
       if (state.personas.items.length) completed += 1;
-      if (state.variants.length >= 2) completed += 1;
+      if (state.variants.length >= 1) completed += 1;
       if (state.simulationRun.status === "completed") completed += 1;
       if (state.report.data) completed += 1;
       return Math.round((completed / 5) * 100);
@@ -207,11 +217,9 @@ export const useCampaignStore = defineStore("campaign", {
           ? `${state.personas.items.length} personas`
           : "Not generated";
       const variantSubtitle =
-        state.variants.length >= 2
-          ? `${state.variants.length} variants ready`
-          : state.variants.length
-            ? `${state.variants.length} variant — need 2+`
-            : "No variants";
+        state.variants.length >= 1
+          ? `${state.variants.length} variant${state.variants.length > 1 ? "s" : ""} ready`
+          : "No variants";
       const reportSubtitle = state.report.data
         ? "Report ready"
         : state.simulationRun.status === "completed"
@@ -244,7 +252,7 @@ export const useCampaignStore = defineStore("campaign", {
       if (state.currentStep === 1 && state.graphReady) return "Continue to personas";
       if (state.currentStep === 2 && !state.personas.items.length) return "Generate personas";
       if (state.currentStep === 2) return "Build campaign variants";
-      if (state.currentStep === 3 && state.variants.length < 2) return "Add more variants";
+      if (state.currentStep === 3 && state.variants.length < 1) return "Add a variant";
       if (state.currentStep === 3) return "Launch simulation";
       if (state.currentStep === 4 && !state.report.data) return "Generate insights report";
       if (state.currentStep === 4) return "Open persona insights";
@@ -253,6 +261,11 @@ export const useCampaignStore = defineStore("campaign", {
   },
 
   actions: {
+    setCampaignObjective(objective) {
+      this.campaignObjective = objective || "";
+      this.persist();
+    },
+
     persist() {
       localStorage.setItem(STEP_KEY, String(this.currentStep));
       localStorage.setItem(VARIANTS_KEY, JSON.stringify(this.variants));
@@ -269,6 +282,7 @@ export const useCampaignStore = defineStore("campaign", {
           graph: this.graph,
           personas: this.personas,
           variants: this.variants,
+          campaignObjective: this.campaignObjective,
           simulationRun: this.simulationRun,
           report: this.report,
           history: this.history,
@@ -364,7 +378,7 @@ export const useCampaignStore = defineStore("campaign", {
       throw new Error("Graph build timed out after 5 minutes.");
     },
 
-    async prepareGraph() {
+    async prepareGraph(fanOut = 1) {
       if (!this.simulationId || !this.graphId) {
         this.graph.error = "Upload a brand brief before building the graph.";
         return null;
@@ -377,6 +391,7 @@ export const useCampaignStore = defineStore("campaign", {
         const task = await prepareGraphApi({
           simulation_id: this.simulationId,
           graph_id: this.graphId,
+          fan_out: fanOut,
         });
         // If already prepared, skip polling and just load relations
         if (!task.task_id || task.already_prepared) {
@@ -540,7 +555,7 @@ export const useCampaignStore = defineStore("campaign", {
 
     async startAbTest() {
       if (!this.canStartSimulation) {
-        throw new Error("Create 2 to 3 variants before starting the A/B simulation.");
+        throw new Error("Create 1 to 6 variants before starting the A/B simulation.");
       }
 
       this.simulationRun.loading = true;
@@ -550,6 +565,7 @@ export const useCampaignStore = defineStore("campaign", {
           simulation_id: this.simulationId,
           brand_name: this.project?.project_name || "",
           campaign_goal: this.project?.simulation_requirement || "",
+          objective: this.campaignObjective || "",
           variants: this.variants.map(toApiVariant),
         });
         // Save campaign_id — required for ab_status polling and report generation
@@ -892,6 +908,9 @@ export const useCampaignStore = defineStore("campaign", {
       this.report = { data: null, loading: false, error: null };
       this.interviewMessages = [];
       [PROJECT_KEY, STEP_KEY, VARIANTS_KEY, MOCK_STATE_KEY].forEach((key) => localStorage.removeItem(key));
+      // A designer chat session is scoped to the simulation it was started
+      // against — don't let it leak into the next campaign.
+      useDesignerStore().reset();
     },
   },
 });

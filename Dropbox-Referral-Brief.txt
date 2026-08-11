@@ -1,0 +1,63 @@
+DROPBOX REFERRAL PROGRAM — CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published Dropbox growth case studies (Drew Houston, Y Combinator Startup School talks; widely cited growth-hacking retrospectives, 2008–2010)
+
+=== BRAND OVERVIEW ===
+
+Dropbox is a cloud file-storage and synchronization service that lets users save files online and access them from any device. In its early years (2008–2010), Dropbox's entire growth strategy centered on product-led virality rather than paid acquisition — the product itself was built to spread.
+
+Brand values: Simplicity, reliability, "it just works."
+Market positioning: The effortless way to keep your files everywhere, with no setup friction.
+
+=== THE REFERRAL PROGRAM ===
+
+Dropbox's referral program is a double-sided storage incentive. An existing user invites a friend via a unique referral link; once the friend signs up and installs Dropbox, both the referrer and the new user receive bonus storage space (initially 250MB per successful referral, later 500MB, up to a capped maximum of additional free storage).
+
+Unlike a cash incentive, the reward is the product itself — more of the exact thing the user already wants more of. This made the incentive feel native rather than transactional, and removed any "selling out a friend for money" friction.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The Early Adopter Power User
+Age: 22–34.
+Psychographics: Technically literate, already juggling files across multiple devices, frustrated by emailing files to themselves. Active in tech-forward online communities.
+Platforms: Email, tech forums/communities, word-of-mouth among coworkers.
+Buying behaviour: Adopts new tools early, evangelizes tools that solve a real daily pain point.
+Ad response: Unmoved by traditional advertising. Highly responsive to in-product prompts that show a concrete, immediate personal benefit (e.g., "get more space").
+
+Segment 2 — The Collaborative Team Member
+Age: 25–45.
+Psychographics: Works on shared documents/projects, frequently needs to send large files to colleagues or classmates, mildly frustrated by email attachment size limits.
+Platforms: Email, in-product notifications, workplace/team chat mentions.
+Buying behaviour: Adopts tools that a colleague already uses, to reduce friction in collaboration.
+Ad response: Responds to social proof ("your colleague uses this") and to reminders tied to a real moment of need (e.g., right after hitting a storage limit).
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Drive referral invites sent and completed (friend signs up + installs) among existing free-tier Dropbox users.
+
+Context: Dropbox is testing where in the product experience a referral prompt is surfaced, to see which placement converts existing users into active referrers most effectively.
+
+Target metric: Number of completed referrals (successful friend signups) per 1,000 active free-tier users exposed to the prompt.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Sponsored Workflow Tip" (professional-context placement)
+Headline: Stop emailing files to yourself.
+Body: Power users juggle files across a laptop, tablet, and phone — and waste time doing it. Invite a teammate to Dropbox and you'll both get 500MB of extra space, free.
+CTA: Invite a teammate
+Target segment: Early Adopter Power User (Segment 1)
+Channel: LinkedIn
+Format: SponsoredPost
+
+VARIANT B — "Email Re-Engagement Nudge" (sent to existing users who have not yet referred anyone)
+Headline: Get more space. It's free.
+Body: You've got friends who could use more storage too. Send them a Dropbox invite and you'll both get 500MB extra, free.
+CTA: Send an invite
+Target segment: Collaborative Team Member (Segment 2)
+Channel: Email
+Format: EmailNewsletter
+
+=== BRAND VOICE ===
+
+Tone: Plain, friendly, low-key. No hype, no urgency tactics.
+We focus on the concrete, immediate benefit (more space) rather than abstract brand storytelling.

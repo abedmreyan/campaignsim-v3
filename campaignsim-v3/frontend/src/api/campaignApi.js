@@ -30,3 +30,7 @@ export const getReport = api.getReport;
 export const interviewPersona = api.interviewPersona;
 export const getHistory = api.getHistory;
 export const suggestBrandIntel = api.suggestBrandIntel;
+export const getChannels = api.getChannels;
+export const draftChannel = api.draftChannel;
+export const createChannel = api.createChannel;
+export const deleteChannel = api.deleteChannel;

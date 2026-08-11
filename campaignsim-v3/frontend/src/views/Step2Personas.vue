@@ -61,6 +61,42 @@
       <ErrorState v-if="store.personas.error" :message="store.personas.error" />
     </AppCard>
 
+    <AppCard v-if="!store.isMockMode" eyebrow="Real-data" title="Generate from customer segments">
+      <p v-if="!approvedSegments.length && !segmentsLoading" class="segment-gen__empty">
+        No approved segments yet. <RouterLink to="/audience/data">Upload and segment a customer dataset</RouterLink>
+        to ground personas in real customer data.
+      </p>
+      <template v-else>
+        <div class="segment-gen__picker">
+          <label v-for="segment in approvedSegments" :key="segment.id" class="segment-gen__option">
+            <input type="checkbox" :value="segment.id" v-model="selectedSegmentIds" />
+            {{ segment.name }} ({{ segment.size }} customers)
+          </label>
+        </div>
+        <div class="toolbar-row" style="margin-top: 0.75rem">
+          <label>
+            <span>Total personas</span>
+            <input v-model.number="segmentTotalN" type="number" min="1" max="200" style="width: 6rem" />
+          </label>
+          <label>
+            <span>Mode</span>
+            <select v-model="segmentMode">
+              <option value="hybrid">Hybrid — add to existing audience</option>
+              <option value="segments">Segments only — replace audience (keep brand agent)</option>
+            </select>
+          </label>
+          <AppButton
+            :disabled="!selectedSegmentIds.length"
+            :loading="segmentGenLoading"
+            @click="generateFromSegments"
+          >
+            Generate segment personas
+          </AppButton>
+        </div>
+        <ErrorState v-if="segmentGenError" :message="segmentGenError" />
+      </template>
+    </AppCard>
+
     <div v-if="store.personas.loading && !store.personas.items.length" class="persona-grid">
       <div v-for="n in 6" :key="n" class="skeleton-card">
         <SkeletonBlock variant="title" />
@@ -89,7 +125,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import AppButton from "@/components/common/AppButton.vue";
 import AppCard from "@/components/common/AppCard.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
@@ -99,6 +135,7 @@ import SkeletonBlock from "@/components/common/SkeletonBlock.vue";
 import PersonaCard from "@/components/personas/PersonaCard.vue";
 import PersonaDetailDrawer from "@/components/personas/PersonaDetailDrawer.vue";
 import { useCampaignStore } from "@/stores/campaignStore";
+import { generatePersonasFromSegments, listSegments } from "@/api/dataApi";
 
 const store = useCampaignStore();
 const count = ref(30);
@@ -106,6 +143,47 @@ const search = ref("");
 const segmentFilter = ref("");
 const activePersona = ref(null);
 const counts = [10, 20, 30, 50];
+
+const approvedSegments = ref([]);
+const segmentsLoading = ref(false);
+const selectedSegmentIds = ref([]);
+const segmentTotalN = ref(30);
+const segmentMode = ref("hybrid");
+const segmentGenLoading = ref(false);
+const segmentGenError = ref(null);
+
+async function loadApprovedSegments() {
+  if (store.isMockMode) return;
+  segmentsLoading.value = true;
+  try {
+    const all = await listSegments();
+    approvedSegments.value = all.filter((s) => s.status === "approved");
+  } catch {
+    approvedSegments.value = [];
+  } finally {
+    segmentsLoading.value = false;
+  }
+}
+
+async function generateFromSegments() {
+  segmentGenLoading.value = true;
+  segmentGenError.value = null;
+  try {
+    await generatePersonasFromSegments({
+      simulationId: store.simulationId,
+      segmentIds: selectedSegmentIds.value,
+      totalN: segmentTotalN.value,
+      mode: segmentMode.value,
+    });
+    await store.loadPersonas();
+  } catch (err) {
+    segmentGenError.value = err?.message || "Could not generate personas from segments.";
+  } finally {
+    segmentGenLoading.value = false;
+  }
+}
+
+onMounted(loadApprovedSegments);
 
 const segments = computed(() => [...new Set(store.personas.items.map((p) => p.segment).filter(Boolean))]);
 
@@ -124,3 +202,23 @@ const filteredPersonas = computed(() =>
   }),
 );
 </script>
+
+<style scoped>
+.segment-gen__empty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.segment-gen__picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.segment-gen__option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+</style>
