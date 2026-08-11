@@ -73,5 +73,9 @@ v3-*.png
 process-*.png
 history-*.png
 
+# ...except the actual site brand assets referenced by index.html/Home.vue
+!campaignsim-v3/frontend/public/logo.png
+!campaignsim-v3/frontend/public/icon.png
+
 # Old versions (exclude from git, they're large and superseded)
 campaignsim-v2/
