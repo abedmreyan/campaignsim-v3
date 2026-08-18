@@ -17,7 +17,9 @@ apiClient.interceptors.response.use(
     if (status === 401 && !error.config._retried && !error.config._skipRefresh) {
       error.config._retried = true;
       try {
-        await apiClient.post("/api/auth/refresh");
+        // Mark this call itself so a 401 here falls through to the catch below
+        // instead of recursing back into this same interceptor forever.
+        await apiClient.post("/api/auth/refresh", null, { _skipRefresh: true });
         return apiClient(error.config);
       } catch {
         // Refresh failed (expired/revoked) — clear user and redirect to login,
