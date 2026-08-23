@@ -1,7 +1,11 @@
 import * as mockApi from "./mockApi";
 import * as realApi from "./realApi";
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
+// Mock mode is opt-in, not opt-out: an unset/missing env var must mean "real
+// backend". The previous polarity (`!== "false"`) meant any build without a
+// .env file — including production, which never had one — silently ran the
+// entire graph/persona/simulation pipeline against fake mock data.
+const useMocks = import.meta.env.VITE_USE_MOCKS === "true";
 const api = useMocks ? mockApi : realApi;
 
 export const isMockMode = useMocks;

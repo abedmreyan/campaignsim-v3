@@ -317,10 +317,9 @@ export async function generateProfiles({ simulation_id, count = 30 }) {
   };
 }
 
-export async function getProfiles() {
-  await delay(650);
+function buildMockPersonas() {
   const basePersonas = clone(mock().personas);
-  const personas = Array.from({ length: state.personaCount }, (_item, index) => {
+  return Array.from({ length: state.personaCount }, (_item, index) => {
     const base = basePersonas[index % basePersonas.length];
     const suffix = index < basePersonas.length ? "" : ` ${index + 1}`;
     return {
@@ -330,8 +329,21 @@ export async function getProfiles() {
       name: `${base.name}${suffix}`,
     };
   });
+}
+
+export async function getProfiles() {
+  await delay(650);
   return {
-    personas,
+    personas: buildMockPersonas(),
+  };
+}
+
+export async function getProfileGenerationStatus() {
+  await delay(400);
+  return {
+    status: "completed",
+    progress: 100,
+    result: { profiles: buildMockPersonas() },
   };
 }
 

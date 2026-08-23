@@ -436,7 +436,10 @@ export const useCampaignStore = defineStore("campaign", {
         this.graph.progress = data.progress || 0;
         this.graph.statusText = data.current_step || "";
         this.persist();
-        if (status === "completed") return data;
+        // Once the simulation is already prepared, the backend short-circuits
+        // to "ready" on every subsequent poll (regardless of task_id) instead
+        // of "completed" — both mean done.
+        if (status === "completed" || status === "ready") return data;
         if (status === "failed") throw new Error(data.message || "Graph preparation failed.");
       }
       throw new Error("Graph preparation timed out after 3 minutes.");
@@ -538,8 +541,8 @@ export const useCampaignStore = defineStore("campaign", {
       this.personas.error = null;
       try {
         const { apiClient } = await import("@/api/client.js");
-        const resp = await apiClient.get(`/api/simulation/personas?brief_id=${briefId}`);
-        this.personas.items = resp.data.items;
+        const resp = await apiClient.get(`/api/briefs/${briefId}/personas`);
+        this.personas.items = resp.data.data;
       } catch (err) {
         this.personas.error = err.message || "Failed to load personas";
       } finally {
@@ -549,13 +552,13 @@ export const useCampaignStore = defineStore("campaign", {
 
     async deletePersona(personaId) {
       const { apiClient } = await import("@/api/client.js");
-      await apiClient.delete(`/api/simulation/persona/${personaId}`);
+      await apiClient.delete(`/api/briefs/personas/${personaId}`);
       this.personas.items = this.personas.items.filter((p) => p.id !== personaId);
     },
 
     async clearPersonas(briefId) {
       const { apiClient } = await import("@/api/client.js");
-      await apiClient.post(`/api/simulation/personas/clear?brief_id=${briefId}`);
+      await apiClient.post(`/api/briefs/${briefId}/personas/clear`);
       this.personas.items = [];
     },
 
