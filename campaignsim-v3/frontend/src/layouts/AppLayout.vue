@@ -7,28 +7,20 @@
     :data-page="currentPage"
   >
     <!-- ── Left Sidebar ──────────────────────────────────────────────── -->
-    <aside class="app-sidebar">
+    <!-- Expands on hover/keyboard-focus instead of a manual toggle button. -->
+    <aside
+      class="app-sidebar"
+      @mouseenter="sidebarExpanded = true"
+      @mouseleave="sidebarExpanded = false"
+      @focusin="sidebarExpanded = true"
+      @focusout="sidebarExpanded = false"
+    >
       <!-- Brand -->
       <div class="sidebar__brand">
         <RouterLink to="/" class="sidebar__logo-link">
           <img src="/logo.png" alt="CampaignSim" class="sidebar__logo-img" />
         </RouterLink>
       </div>
-
-      <!-- Collapse toggle -->
-      <button
-        class="sidebar__collapse-btn"
-        :title="sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'"
-        :aria-label="sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'"
-        @click="sidebarExpanded = !sidebarExpanded"
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path
-            :d="sidebarExpanded ? 'M8 2L4 6L8 10' : 'M4 2L8 6L4 10'"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-          />
-        </svg>
-      </button>
 
       <!-- Primary navigation -->
       <nav class="sidebar__nav" aria-label="Main navigation">
@@ -90,15 +82,6 @@
             <path d="M12 7V12L15.5 14.5"/>
           </svg>
           <span class="sidebar__label">History</span>
-        </RouterLink>
-
-        <RouterLink v-if="!store.isMockMode" to="/briefs" class="sidebar__item" active-class="sidebar__item--active">
-          <svg class="sidebar__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
-            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>
-            <path d="M9 13h6M9 17h6"/>
-          </svg>
-          <span class="sidebar__label">Brand briefs</span>
         </RouterLink>
       </nav>
 

@@ -1,5 +1,6 @@
 <template>
-  <div class="data-view view-stack stagger-in">
+  <AppLayout>
+    <div class="data-view view-stack stagger-in">
     <PageHeader
       title="Customer Data"
       eyebrow="Audience"
@@ -102,11 +103,13 @@
         </template>
       </AppCard>
     </div>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup>
 import { onMounted, ref } from "vue";
+import AppLayout from "@/layouts/AppLayout.vue";
 import AppButton from "@/components/common/AppButton.vue";
 import AppCard from "@/components/common/AppCard.vue";
 import AppLoader from "@/components/common/AppLoader.vue";

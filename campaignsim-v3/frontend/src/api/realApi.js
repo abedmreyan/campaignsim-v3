@@ -16,7 +16,7 @@ export async function createSimulationProject({ projectId, graphId } = {}) {
   }));
 }
 
-export async function uploadBrandBrief({ file, projectName, simulationRequirement }) {
+export async function uploadBrandBrief({ file, projectName, simulationRequirement, briefId }) {
   const formData = new FormData();
   formData.append("files", file);
   formData.append(
@@ -24,6 +24,8 @@ export async function uploadBrandBrief({ file, projectName, simulationRequiremen
     simulationRequirement || "Extract brand intelligence: products, audiences, channels, and competitive landscape",
   );
   formData.append("project_name", projectName || file.name.replace(/\.[^.]+$/, "") || "Campaign Brief");
+  // Reuse the already-selected brief instead of minting a new one each upload.
+  if (briefId) formData.append("brief_id", briefId);
   return unwrap(
     await apiClient.post(endpoints.graphOntologyGenerate, formData, {
       headers: { "Content-Type": "multipart/form-data" },

@@ -1,79 +1,63 @@
 <template>
-  <div class="main-view">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="brand" @click="router.push('/')">CAMPAIGNSIM</div>
-      </div>
+  <AppLayout>
+    <div class="campaign-report-view">
+      <PageHeader eyebrow="Campaign" title="Recommendations report" description="Live A/B results and the knowledge graph behind them.">
+        <template #actions>
+          <div class="view-switcher">
+            <button
+              v-for="mode in ['graph', 'split', 'workbench']"
+              :key="mode"
+              class="switch-btn"
+              :class="{ active: viewMode === mode }"
+              @click="viewMode = mode"
+            >
+              {{ { graph: 'Graph', split: 'Split', workbench: 'Workbench' }[mode] }}
+            </button>
+          </div>
+          <span class="status-indicator" :class="statusClass">
+            <span class="dot"></span>
+            {{ statusText }}
+          </span>
+        </template>
+      </PageHeader>
 
-      <div class="header-center">
-        <div class="view-switcher">
-          <button
-            v-for="mode in ['graph', 'split', 'workbench']"
-            :key="mode"
-            class="switch-btn"
-            :class="{ active: viewMode === mode }"
-            @click="viewMode = mode"
-          >
-            {{ { graph: $t('main.layoutGraph'), split: $t('main.layoutSplit'), workbench: $t('main.layoutWorkbench') }[mode] }}
-          </button>
+      <!-- Main Content Area -->
+      <main class="content-area">
+        <!-- Left Panel: Graph -->
+        <div class="panel-wrapper left" :style="leftPanelStyle">
+          <GraphPanel
+            :graphData="graphData"
+            :loading="graphLoading"
+            :currentPhase="4"
+            :isSimulating="false"
+            @refresh="refreshGraph"
+            @toggle-maximize="toggleMaximize('graph')"
+          />
         </div>
-      </div>
 
-      <div class="header-right">
-        <LanguageSwitcher />
-        <div class="step-divider"></div>
-        <div class="workflow-step">
-          <span class="step-num">Campaign</span>
-          <span class="step-name">Recommendations</span>
+        <!-- Right Panel: Campaign Report -->
+        <div class="panel-wrapper right" :style="rightPanelStyle">
+          <Step5CampaignReport
+            :campaignId="currentCampaignId"
+            @add-log="addLog"
+            @update-status="updateStatus"
+          />
         </div>
-        <div class="step-divider"></div>
-        <span class="status-indicator" :class="statusClass">
-          <span class="dot"></span>
-          {{ statusText }}
-        </span>
-      </div>
-    </header>
-
-    <!-- Main Content Area -->
-    <main class="content-area">
-      <!-- Left Panel: Graph -->
-      <div class="panel-wrapper left" :style="leftPanelStyle">
-        <GraphPanel
-          :graphData="graphData"
-          :loading="graphLoading"
-          :currentPhase="4"
-          :isSimulating="false"
-          @refresh="refreshGraph"
-          @toggle-maximize="toggleMaximize('graph')"
-        />
-      </div>
-
-      <!-- Right Panel: Campaign Report -->
-      <div class="panel-wrapper right" :style="rightPanelStyle">
-        <Step5CampaignReport
-          :campaignId="currentCampaignId"
-          @add-log="addLog"
-          @update-status="updateStatus"
-        />
-      </div>
-    </main>
-  </div>
+      </main>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import GraphPanel from '../components/GraphPanel.vue'
+import { useRoute } from 'vue-router'
+import AppLayout from '@/layouts/AppLayout.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import GraphPanel from '../components/graph/GraphPanel.vue'
 import Step5CampaignReport from '../components/Step5CampaignReport.vue'
-import LanguageSwitcher from '../components/LanguageSwitcher.vue'
-import { getProject, getGraphData } from '../api/graph'
-import { getAbStatus } from '../api/simulation'
+import { getGraphRelations, getAbStatus } from '@/api/campaignApi'
 
 const route = useRoute()
-const router = useRouter()
-const { t } = useI18n()
 
 const props = defineProps({
   campaignId: String
@@ -129,11 +113,9 @@ const toggleMaximize = (target) => {
 const loadGraphForCampaign = async () => {
   if (!currentCampaignId.value) return
   try {
-    const res = await getAbStatus(currentCampaignId.value)
-    if (res.success && res.data) {
-      const graphId = res.data.graph_id
-      if (graphId) await loadGraph(graphId)
-    }
+    const data = await getAbStatus(currentCampaignId.value)
+    const graphId = data.graph_id
+    if (graphId) await loadGraph(graphId)
   } catch {
     // graph is optional — don't block on failure
   }
@@ -142,11 +124,8 @@ const loadGraphForCampaign = async () => {
 const loadGraph = async (graphId) => {
   graphLoading.value = true
   try {
-    const res = await getGraphData(graphId)
-    if (res.success) {
-      graphData.value = res.data
-      addLog('Graph data loaded.')
-    }
+    graphData.value = await getGraphRelations(graphId)
+    addLog('Graph data loaded.')
   } catch (err) {
     addLog(`Graph load failed: ${err.message}`)
   } finally {
@@ -165,39 +144,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.main-view {
-  height: 100vh;
+.campaign-report-view {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #FFF;
-  overflow: hidden;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
-}
-
-.app-header {
-  height: 60px;
-  border-bottom: 1px solid #EAEAEA;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: #FFF;
-  z-index: 100;
-  position: relative;
-}
-
-.brand {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 1px;
-  cursor: pointer;
-}
-
-.header-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  gap: 1rem;
 }
 
 .view-switcher {
@@ -226,36 +178,6 @@ onMounted(() => {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.step-num {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  color: #999;
-}
-
-.step-name {
-  font-weight: 700;
-  color: #000;
-}
-
-.step-divider {
-  width: 1px;
-  height: 14px;
-  background-color: #E0E0E0;
-}
-
 .status-indicator {
   display: flex;
   align-items: center;
@@ -280,9 +202,12 @@ onMounted(() => {
 
 .content-area {
   flex: 1;
+  min-height: 0;
   display: flex;
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 0.625rem);
 }
 
 .panel-wrapper {

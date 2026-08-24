@@ -1,5 +1,6 @@
 <template>
-  <div class="designer-session-view view-stack stagger-in">
+  <AppLayout>
+    <div class="designer-session-view view-stack stagger-in">
     <PageHeader
       title="Campaign Designer"
       eyebrow="Iteration draft"
@@ -72,12 +73,14 @@
         </AppCard>
       </div>
     </template>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppLayout from "@/layouts/AppLayout.vue";
 import AppButton from "@/components/common/AppButton.vue";
 import AppCard from "@/components/common/AppCard.vue";
 import AppLoader from "@/components/common/AppLoader.vue";

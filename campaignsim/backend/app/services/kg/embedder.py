@@ -3,12 +3,18 @@ Embedding generation for the local knowledge graph.
 
 Primary:  OpenAI-compatible ``/v1/embeddings`` endpoint
           (same provider already configured for LLM calls).
-Fallback: TF-IDF + SVD (latent semantic analysis) via scikit-learn,
-          used when the embeddings endpoint is unavailable or returns an error.
+Fallback: feature hashing (HashingVectorizer) via scikit-learn, used when
+          the embeddings endpoint is unavailable or returns an error.
 
-The fallback vectors are re-fitted each call from the current corpus so they
-remain in sync with newly added documents.  Performance is adequate for
-corpora up to ~10 K items.
+Feature hashing is stateless and always produces a fixed-size vector
+regardless of how many texts are passed in a call or what corpus has been
+seen before — unlike a corpus-fit TF-IDF+SVD model (the previous approach
+here), whose output dimensionality depended on how many texts were in each
+individual call. That meant a single search query (1 text) and a batch of
+graph edges (N texts) landed in *different-sized* vector spaces and could
+never be compared — see the `ValueError: shapes (1,) and (8,) not aligned`
+crash this replaced. Every call now lands in the same _EMBEDDING_DIM_TFIDF
+dimensions, so query and index vectors are always comparable.
 """
 
 from __future__ import annotations
@@ -51,10 +57,6 @@ class Embedder:
         self._api_available: Optional[bool] = None  # None = not yet probed
         self._dim: Optional[int] = None
         self._lock = threading.Lock()
-
-        # TF-IDF fallback state
-        self._tfidf_vectorizer: Any = None
-        self._tfidf_svd: Any = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -105,35 +107,29 @@ class Embedder:
         return all_embeddings
 
     # ------------------------------------------------------------------
-    # TF-IDF + SVD fallback
+    # Feature-hashing fallback
     # ------------------------------------------------------------------
 
     def _embed_via_tfidf(self, texts: List[str]) -> List[List[float]]:
         """
-        Produce dense vectors via TF-IDF + TruncatedSVD (LSA).
+        Produce dense vectors via feature hashing (HashingVectorizer).
 
-        The model is re-fitted on the *current* query corpus each call so new
-        documents always contribute to the vocabulary.  For retrieval tasks the
-        relative similarities are what matter, not cross-call absolute positions.
+        Stateless and corpus-independent: the output is always exactly
+        _EMBEDDING_DIM_TFIDF dimensions, whether embedding a single query
+        string or a batch of hundreds of texts, so vectors from any two
+        calls are always directly comparable via cosine similarity.
         """
         try:
-            from sklearn.decomposition import TruncatedSVD
-            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.feature_extraction.text import HashingVectorizer
             from sklearn.preprocessing import normalize
 
-            dim = min(_EMBEDDING_DIM_TFIDF, max(1, len(texts) - 1))
-            vectorizer = TfidfVectorizer(
-                max_features=8192, ngram_range=(1, 2), sublinear_tf=True
+            vectorizer = HashingVectorizer(
+                n_features=_EMBEDDING_DIM_TFIDF,
+                ngram_range=(1, 2),
+                alternate_sign=False,
+                norm=None,
             )
-            tfidf_matrix = vectorizer.fit_transform(texts)
-
-            if dim >= tfidf_matrix.shape[1]:
-                # corpus too small for SVD — use raw TF-IDF
-                dense = tfidf_matrix.toarray()
-            else:
-                svd = TruncatedSVD(n_components=dim, random_state=42)
-                dense = svd.fit_transform(tfidf_matrix)
-
+            dense = vectorizer.transform(texts).toarray()
             dense = normalize(dense, norm="l2")
             return dense.tolist()
 
@@ -142,7 +138,7 @@ class Embedder:
             # Last resort: zero vectors so downstream code doesn't crash
             return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
         except Exception as exc:
-            logger.error(f"TF-IDF embedding failed: {exc}")
+            logger.error(f"Fallback embedding failed: {exc}")
             return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
 
 

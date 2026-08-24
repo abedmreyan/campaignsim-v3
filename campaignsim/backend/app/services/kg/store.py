@@ -1,10 +1,17 @@
 """
-SQLite-backed knowledge graph store.
+Knowledge graph store.
 
-One ``.db`` file per graph, stored at ``{KG_DATA_DIR}/{graph_id}.db``.
-All write operations are serialised through a per-store threading.Lock so
-the store is safe for use from the simulation's ThreadPoolExecutor and the
-ZepGraphMemoryUpdater background thread simultaneously.
+``get_store()`` is the single factory every caller in this package (and the
+9+ external call sites that do ``KGClient(data_dir=Config.KG_DATA_DIR)``)
+goes through — none of them touch a store implementation directly, so the
+backend can be swapped here without touching anything else.
+
+As of this file, storage is backed by Postgres (``postgres_store.py``) —
+the same independent, durable Postgres cluster the rest of the app already
+uses — instead of the ``SQLiteStore`` defined below, which wrote one .db
+file per graph to local container disk that gets wiped on every redeploy.
+``SQLiteStore`` is kept in this file (unused by ``get_store()`` now) as a
+reference/fallback implementation, not because anything still calls it.
 
 Pagination mirrors the Zep cursor-based pattern so that ``zep_paging.py``
 (now updated to be client-agnostic) continues to work unmodified.
@@ -37,18 +44,23 @@ _registry: Dict[str, "SQLiteStore"] = {}
 _registry_lock = threading.Lock()
 
 
-def get_store(graph_id: str, data_dir: str) -> "SQLiteStore":
-    """Return (creating if necessary) the SQLiteStore for *graph_id*."""
-    with _registry_lock:
-        if graph_id not in _registry:
-            _registry[graph_id] = SQLiteStore(graph_id, data_dir)
-        return _registry[graph_id]
+def get_store(graph_id: str, data_dir: str):
+    """
+    Return (creating if necessary) the store for *graph_id*.
+
+    Backed by Postgres (``postgres_store.py``) for durability across
+    container redeploys. ``data_dir`` is accepted (and ignored) purely so
+    every existing caller — ``KGClient(data_dir=Config.KG_DATA_DIR)`` and
+    everything downstream of it — keeps working unmodified.
+    """
+    from . import postgres_store
+    return postgres_store.get_store(graph_id)
 
 
 def evict_store(graph_id: str) -> None:
     """Remove a store from the registry (called after graph deletion)."""
-    with _registry_lock:
-        _registry.pop(graph_id, None)
+    from . import postgres_store
+    postgres_store.evict_store(graph_id)
 
 
 # ---------------------------------------------------------------------------

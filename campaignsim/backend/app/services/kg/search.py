@@ -127,7 +127,14 @@ def _rank(
         for c in candidates:
             if c.embedding is not None:
                 v = np.array(c.embedding, dtype=np.float32)
-                score = float(np.dot(q, v) / (np.linalg.norm(q) * np.linalg.norm(v) + 1e-10))
+                if v.shape != q.shape:
+                    # Embedded under an old, differently-dimensioned fallback
+                    # scheme (e.g. the pre-fix TF-IDF+SVD embedder) — skip
+                    # vector scoring for this candidate instead of crashing;
+                    # it'll get correct embeddings on the next graph rebuild.
+                    score = 0.0
+                else:
+                    score = float(np.dot(q, v) / (np.linalg.norm(q) * np.linalg.norm(v) + 1e-10))
             else:
                 score = 0.0
             cosine_scores.append(score)

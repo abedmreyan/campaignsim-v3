@@ -4,6 +4,7 @@ Uses project context mechanism with server-side persistent state"""
 import os
 import traceback
 import threading
+import uuid
 from flask import request, jsonify, g
 
 from . import graph_bp
@@ -179,6 +180,21 @@ def generate_ontology():
         project_name = request.form.get('project_name', 'Unnamed Project')
         additional_context = request.form.get('additional_context', '')
         business_type = request.form.get('business_type') or None
+        brief_id = request.form.get('brief_id') or None
+
+        # Reusing an already-selected brief? Look it up now so we can clean
+        # up its old project directory before minting a new one below,
+        # instead of leaking it and creating a duplicate Brand Brief row.
+        existing_brief = None
+        if brief_id:
+            try:
+                existing_brief = BrandBrief.query.filter_by(
+                    id=uuid.UUID(str(brief_id)), user_id=g.current_user.id
+                ).first()
+            except ValueError:
+                existing_brief = None
+            if existing_brief and existing_brief.project_id:
+                ProjectManager.delete_project(existing_brief.project_id)
         if business_type and business_type not in BUSINESS_TYPES:
             return jsonify({
                 "success": False,
@@ -258,16 +274,27 @@ def generate_ontology():
         ProjectManager.save_project(project)
         logger.info(f"=== Ontology complete === Project ID: {project.project_id}")
 
-        # Record ownership + reusable brief text for this user.
-        brief = BrandBrief(
-            user_id=g.current_user.id,
-            name=project_name,
-            content=all_text,
-            project_id=project.project_id,
-            graph_status='pending',
-            business_type=business_type,
-        )
-        db.session.add(brief)
+        # Record ownership + reusable brief text for this user — reuse the
+        # selected brief in place if one was passed, instead of always
+        # minting a new "Brand Briefs" row on every upload.
+        if existing_brief:
+            existing_brief.name = project_name
+            existing_brief.content = all_text
+            existing_brief.project_id = project.project_id
+            existing_brief.graph_id = None
+            existing_brief.graph_status = 'pending'
+            existing_brief.business_type = business_type
+            brief = existing_brief
+        else:
+            brief = BrandBrief(
+                user_id=g.current_user.id,
+                name=project_name,
+                content=all_text,
+                project_id=project.project_id,
+                graph_status='pending',
+                business_type=business_type,
+            )
+            db.session.add(brief)
         db.session.commit()
         
         return jsonify({

@@ -41,6 +41,8 @@ dependencies = [
     # Dataset intake + segmentation (Phase 4)
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",
+    # Production WSGI server
+    "gunicorn>=21.2.0",
 ]
 
 [project.optional-dependencies]

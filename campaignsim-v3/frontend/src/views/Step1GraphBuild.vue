@@ -848,7 +848,7 @@
 </template>
 
 <script setup>
-import { computed, h, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppButton from "@/components/common/AppButton.vue";
 import DrawerPanel from "@/components/common/DrawerPanel.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
@@ -862,6 +862,20 @@ const selectedNode = ref(null);
 const showEntities = ref(false);
 const dragging = ref(false);
 const inputMethod = ref(null); // null | 'guided' | 'upload'
+
+// Reopening a brief that already has a graph (or saved content) should land
+// on that graph, not a blank upload prompt — that blank prompt, combined
+// with no visible way to reuse an existing brief, was why every "Open brief"
+// click was re-uploading and minting a duplicate Brand Brief.
+onMounted(async () => {
+  if (store.brandBriefId && !store.graphReady) {
+    try {
+      await store.resumeBrief(store.brandBriefId);
+    } catch {
+      // store.graph.error already holds a user-facing message
+    }
+  }
+});
 
 // ── Guided form state ──────────────────────────────────────────────────────
 const guidedSection = ref(0);

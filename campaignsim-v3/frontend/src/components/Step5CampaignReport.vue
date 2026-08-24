@@ -157,7 +157,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { generateCampaignRecommendations, getCampaignReport, getAbStatus } from '../api/simulation'
+import { generateCampaignRecommendations, getCampaignReport, getAbStatus } from '@/api/campaignApi'
 import PerRoundChart from './reports/PerRoundChart.vue'
 import FunnelChart from './reports/FunnelChart.vue'
 import InsightChatPanel from './reports/InsightChatPanel.vue'
@@ -238,9 +238,9 @@ const loadReport = async () => {
   if (!props.campaignId) return
   try {
     addLog(`Checking for existing report: ${props.campaignId}`)
-    const res = await getCampaignReport(props.campaignId)
-    if (res.success && res.data?.report_text) {
-      reportData.value = res.data
+    const data = await getCampaignReport(props.campaignId)
+    if (data?.report_text) {
+      reportData.value = data
       addLog('Existing report loaded.')
       emit('update-status', 'completed')
     } else {
@@ -259,9 +259,9 @@ const pollForReport = () => {
   stopPolling()
   pollTimer = setInterval(async () => {
     try {
-      const res = await getCampaignReport(props.campaignId)
-      if (res.success && res.data?.report_text) {
-        reportData.value = res.data
+      const data = await getCampaignReport(props.campaignId)
+      if (data?.report_text) {
+        reportData.value = data
         isGenerating.value = false
         stopPolling()
         addLog('Recommendation report ready.')
@@ -280,19 +280,12 @@ const triggerGenerate = async (force = false) => {
   emit('update-status', 'processing')
   addLog(`Triggering recommendation generation (force=${force})…`)
   try {
-    const res = await generateCampaignRecommendations({
+    await generateCampaignRecommendations({
       campaign_id: props.campaignId,
       force_regenerate: force
     })
-    if (res.success) {
-      addLog('Generation task started. Polling for result…')
-      pollForReport()
-    } else {
-      isGenerating.value = false
-      errorMsg.value = res.error || 'Failed to start recommendation generation.'
-      addLog(`Error: ${errorMsg.value}`)
-      emit('update-status', 'error')
-    }
+    addLog('Generation task started. Polling for result…')
+    pollForReport()
   } catch (err) {
     isGenerating.value = false
     errorMsg.value = err.message

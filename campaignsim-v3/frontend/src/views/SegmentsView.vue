@@ -1,5 +1,6 @@
 <template>
-  <div class="segments-view view-stack stagger-in">
+  <AppLayout>
+    <div class="segments-view view-stack stagger-in">
     <PageHeader
       title="Customer Segments"
       eyebrow="Audience"
@@ -73,12 +74,14 @@
         </div>
       </AppCard>
     </div>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import AppLayout from "@/layouts/AppLayout.vue";
 import AppButton from "@/components/common/AppButton.vue";
 import AppCard from "@/components/common/AppCard.vue";
 import AppLoader from "@/components/common/AppLoader.vue";

@@ -24,6 +24,7 @@ import {
   interviewPersona as interviewPersonaApi,
   getHistory,
 } from "@/api/campaignApi";
+import { getBrief, rebuildGraph as rebuildGraphApi } from "@/api/briefApi";
 
 const PROJECT_KEY = "campaignsim_current_project";
 const STEP_KEY = "campaignsim_current_step";
@@ -138,8 +139,8 @@ export const useCampaignStore = defineStore("campaign", {
     personasReady: (state) => state.personas.items.length > 0,
     canStartSimulation: (state) => state.variants.length >= 1 && state.variants.length <= 6,
     simulationCompleted: (state) => state.simulationRun.status === "completed",
-    modeLabel: () => (import.meta.env.VITE_USE_MOCKS === "false" ? "Live API" : "Mock mode"),
-    isMockMode: () => import.meta.env.VITE_USE_MOCKS !== "false",
+    modeLabel: () => (import.meta.env.VITE_USE_MOCKS === "true" ? "Mock mode" : "Live API"),
+    isMockMode: () => import.meta.env.VITE_USE_MOCKS === "true",
 
     /** Presentation-only: drives .app-shell ambient canvas (idle | running | complete | error). */
     shellAmbientStatus(state) {
@@ -321,12 +322,15 @@ export const useCampaignStore = defineStore("campaign", {
       this.graph.error = null;
       this.graph.progress = 0;
       try {
-        // Step 1: Upload file + generate ontology (creates project server-side)
+        // Step 1: Upload file + generate ontology (creates project server-side).
+        // Pass the already-selected brief so the backend updates it in place
+        // instead of minting a new "Brand Briefs" row on every upload.
         this.graph.statusText = "Analyzing document…";
         const ontologyData = await uploadBriefApi({
           file,
           projectName: file.name.replace(/\.[^.]+$/, ""),
           simulationRequirement,
+          briefId: this.brandBriefId,
         });
         const projectId = ontologyData.project_id;
         this.graph.progress = 20;
@@ -387,6 +391,68 @@ export const useCampaignStore = defineStore("campaign", {
         if (status === "failed") throw new Error(task.message || "Graph build failed.");
       }
       throw new Error("Graph build timed out after 5 minutes.");
+    },
+
+    /**
+     * Called when entering the workflow with a brief already selected
+     * (e.g. "Open brief" from Brand Briefs). Loads that brief's existing
+     * graph if it's already built, or rebuilds it from the brief's saved
+     * content if not — either way, resuming into an active simulation
+     * instead of prompting for a fresh upload.
+     *
+     * Returns "ready" if the graph/simulation is now loaded, or
+     * "needs-upload" if the brief has no content yet to resume from.
+     */
+    async resumeBrief(briefId) {
+      if (!briefId) return "needs-upload";
+
+      this.graph.loading = true;
+      this.graph.error = null;
+      this.graph.progress = 0;
+      try {
+        const brief = await getBrief(briefId);
+        let projectId = brief.project_id;
+        let graphId = brief.graph_id;
+
+        if (brief.graph_status !== "ready" || !graphId) {
+          if (!(brief.content || "").trim()) {
+            return "needs-upload";
+          }
+          this.graph.statusText = "Rebuilding graph from saved brief…";
+          const rebuildData = await rebuildGraphApi(briefId);
+          projectId = rebuildData.project_id;
+          this.graph.progress = 30;
+          graphId = await this._pollGraphBuildTask(rebuildData.task_id, projectId);
+        }
+        this.graph.progress = 85;
+
+        this.graph.statusText = "Loading graph…";
+        await this.loadGraphRelations(graphId);
+
+        this.graph.statusText = "Creating simulation environment…";
+        const simData = await createSimulationProject({ projectId, graphId });
+
+        this.simulationId = simData.simulation_id;
+        this.graphId = graphId;
+        this.uploadedFile = { filename: brief.name, size: (brief.content || "").length };
+        this.project = {
+          ...(this.project || {}),
+          simulation_id: simData.simulation_id,
+          graph_id: graphId,
+          project_id: projectId,
+          project_name: brief.name,
+          status: "preparing",
+        };
+        this.graph.progress = 100;
+        this.persist();
+        return "ready";
+      } catch (error) {
+        this.graph.error = normalizeError(error, "Could not resume this brief.");
+        throw error;
+      } finally {
+        this.graph.loading = false;
+        this.graph.statusText = "";
+      }
     },
 
     async prepareGraph(fanOut = 1) {
