@@ -54,6 +54,8 @@
   --glass-border:       rgba(46, 80, 80, 0.5);
   --glass-border-glow:  rgba(10, 191, 173, 0.35);
   --glass-blur:         20px;
+  --glass-blur-sm:      12px;
+  --glass-highlight:    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* ── Gradients ────────────────────────────────────────── */
   --gradient-accent: linear-gradient(135deg, #0ABFAD 0%, #00C97A 100%);
@@ -139,6 +141,7 @@
   --glass-bg-strong:   rgba(255, 255, 255, 0.97);
   --glass-border:      rgba(10, 191, 173, 0.20);
   --glass-border-glow: rgba(10, 191, 173, 0.50);
+  --glass-highlight:   inset 0 1px 0 rgba(255, 255, 255, 0.65);
 
   /* Gradients — more subtle on white */
   --gradient-mesh:

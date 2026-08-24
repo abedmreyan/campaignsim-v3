@@ -1,3 +1,14 @@
+/* ─── Elevation / z-index scale ───────────────────────────────────────────
+   500  .dynamic-island          (shell/DynamicIsland.vue)
+   200  .user-menu__dropdown     (layouts/AppLayout.vue)
+    50  .drawer-panel / .drawer-overlay / .command-drawer
+    40  .drawer-backdrop
+    30  .app-sidebar
+    20  .topbar
+    10  .app-steps
+     1  .app-shell > *           (page content, above the ambient ::before/::after)
+   ────────────────────────────────────────────────────────────────────────── */
+
 /* ─── App Shell — 3-panel SaaS grid ──────────────────────────────────────── */
 
 .app-shell {
@@ -957,16 +968,18 @@
   box-shadow: 0 0 0 4px #FFFFFF, 0 0 12px rgba(10,191,173,0.4);
 }
 
-/* All step content panels use solid surfaces — no glass blur */
+/* Step content panels use the stronger glass surface (higher opacity than
+   the default --glass-bg) so dense workflow text stays legible over the
+   animated mesh/network backgrounds, without falling back to a flat panel. */
 .content-main .card,
 .content-main .app-card,
 .content-main .panel,
 .step-card,
 .variant-card,
 .persona-card {
-  background: var(--color-bg-elevated) !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--color-border) !important;
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3) !important;
+  border: 1px solid var(--glass-border) !important;
 }
 
 /* Keep the view stack grid for internal step routing */

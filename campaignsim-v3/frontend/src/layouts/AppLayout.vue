@@ -117,11 +117,13 @@
       <div class="sidebar__spacer" />
     </aside>
 
+    <!-- ── Dynamic Island — business/brief switcher, visible on every route ── -->
+    <DynamicIsland />
+
     <!-- ── Topbar ─────────────────────────────────────────────────────── -->
     <header class="topbar">
-      <!-- Project context -->
+      <!-- Workflow status only — active business identity lives in the island now -->
       <div class="topbar__project">
-        <h1 class="topbar__sim-name">{{ store.project?.name || "Campaign workspace" }}</h1>
         <StatusBadge
           :status="store.project?.status || 'draft'"
           :label="store.project?.status || 'Draft'"
@@ -240,6 +242,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import StatusBadge from "@/components/common/StatusBadge.vue";
+import DynamicIsland from "@/components/shell/DynamicIsland.vue";
 import { useCampaignStore } from "@/stores/campaignStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useTheme } from "@/composables/useTheme";
@@ -400,10 +403,11 @@ function onSelectStep(step) {
   top: calc(100% + 0.5rem);
   right: 0;
   min-width: 14rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border-glow);
   border-radius: var(--radius-md, 0.625rem);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.24), 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-lg), var(--glass-highlight);
   z-index: 200;
   overflow: hidden;
 }

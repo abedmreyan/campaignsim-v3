@@ -7,7 +7,7 @@
         description="Select a brief to launch a campaign, or create a new one."
       >
         <template #actions>
-          <AppButton @click="showCreate = !showCreate">
+          <AppButton @click="showCreate ? cancelCreate() : (showCreate = true)">
             {{ showCreate ? "Cancel" : "New brief" }}
           </AppButton>
         </template>
@@ -16,12 +16,12 @@
       <!-- Create form -->
       <Transition name="brief-form">
         <AppCard v-if="showCreate" class="brief-create-card">
-          <form @submit.prevent="createBrief" class="brief-create-form">
+          <form @submit.prevent="handleCreate" class="brief-create-form">
             <div class="brief-create-form__row">
               <label class="brief-create-form__field">
                 <span class="brief-create-form__label">Brief name</span>
                 <input
-                  v-model.trim="newName"
+                  v-model.trim="name"
                   type="text"
                   required
                   placeholder="e.g. Airbnb Summer 2026"
@@ -33,14 +33,8 @@
 
             <label class="brief-create-form__field">
               <span class="brief-create-form__label">Business type <span class="brief-create-form__hint">(optional)</span></span>
-              <select v-model="newBusinessType" class="brief-create-form__input">
-                <option value="">Not set</option>
-                <option value="b2c_product">B2C product</option>
-                <option value="b2b">B2B</option>
-                <option value="services">Services</option>
-                <option value="local">Local business</option>
-                <option value="ecommerce">E-commerce</option>
-                <option value="app">App / software</option>
+              <select v-model="businessType" class="brief-create-form__input">
+                <option v-for="opt in BUSINESS_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
               </select>
             </label>
 
@@ -63,7 +57,7 @@
             <label v-if="contentMode === 'text'" class="brief-create-form__field">
               <span class="brief-create-form__label">Content</span>
               <textarea
-                v-model="newContent"
+                v-model="content"
                 rows="7"
                 placeholder="Paste or type your brand brief here…"
                 class="brief-create-form__textarea"
@@ -74,7 +68,7 @@
               <span class="brief-create-form__label">File <span class="brief-create-form__hint">(PDF, Markdown, or TXT)</span></span>
               <label
                 class="brief-upload-zone"
-                :class="{ 'has-file': uploadFile }"
+                :class="{ 'has-file': file }"
                 @dragover.prevent
                 @drop.prevent="onFileDrop"
               >
@@ -85,36 +79,36 @@
                   class="brief-upload-zone__input"
                   @change="onFileChange"
                 />
-                <svg v-if="!uploadFile" class="brief-upload-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg v-if="!file" class="brief-upload-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/>
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
-                <span v-if="!uploadFile" class="brief-upload-zone__text">
+                <span v-if="!file" class="brief-upload-zone__text">
                   Drag & drop or <span class="brief-upload-zone__browse">browse</span>
                 </span>
                 <span v-else class="brief-upload-zone__filename">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  {{ uploadFile.name }}
-                  <button type="button" class="brief-upload-zone__clear" @click.prevent="uploadFile = null">✕</button>
+                  {{ file.name }}
+                  <button type="button" class="brief-upload-zone__clear" @click.prevent="file = null">✕</button>
                 </span>
               </label>
             </div>
 
-            <p v-if="formError" class="brief-form__error">{{ formError }}</p>
+            <p v-if="error" class="brief-form__error">{{ error }}</p>
 
             <div class="brief-create-form__actions">
               <AppButton type="submit" :disabled="creating">
                 {{ creating ? (uploading ? "Uploading…" : "Creating…") : "Create brief" }}
               </AppButton>
-              <AppButton variant="secondary" @click="showCreate = false">Cancel</AppButton>
+              <AppButton variant="secondary" @click="cancelCreate">Cancel</AppButton>
             </div>
           </form>
         </AppCard>
       </Transition>
 
       <!-- Loading skeletons -->
-      <div v-if="loading" class="brief-grid">
+      <div v-if="workspaceStore.briefsLoading && !briefs.length" class="brief-grid">
         <div v-for="n in 3" :key="n" class="skeleton-card">
           <SkeletonBlock variant="title" />
           <SkeletonBlock width="80%" />
@@ -142,14 +136,14 @@
           v-for="brief in briefs"
           :key="brief.id"
           class="brief-card"
-          :class="{ 'is-active': campaignStore.brandBriefId === brief.id }"
+          :class="{ 'is-active': workspaceStore.activeBriefId === brief.id }"
           role="button"
           tabindex="0"
           @click="selectBrief(brief)"
           @keydown.enter="selectBrief(brief)"
         >
           <!-- Active selection indicator -->
-          <span v-if="campaignStore.brandBriefId === brief.id" class="brief-card__active-bar" aria-hidden="true" />
+          <span v-if="workspaceStore.activeBriefId === brief.id" class="brief-card__active-bar" aria-hidden="true" />
 
           <div class="brief-card__top">
             <div class="brief-card__meta">
@@ -200,13 +194,7 @@
           <label class="brief-create-form__field">
             <span class="brief-create-form__label">Business type</span>
             <select v-model="editBusinessType" class="brief-create-form__input">
-              <option value="">Not set</option>
-              <option value="b2c_product">B2C product</option>
-              <option value="b2b">B2B</option>
-              <option value="services">Services</option>
-              <option value="local">Local business</option>
-              <option value="ecommerce">E-commerce</option>
-              <option value="app">App / software</option>
+              <option v-for="opt in BUSINESS_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </label>
           <label class="brief-create-form__field">
@@ -221,10 +209,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { apiClient } from "@/api/client.js";
-import { useCampaignStore } from "@/stores/campaignStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import AppLayout from "@/layouts/AppLayout.vue";
 import AppButton from "@/components/common/AppButton.vue";
 import AppCard from "@/components/common/AppCard.vue";
@@ -232,35 +220,18 @@ import DrawerPanel from "@/components/common/DrawerPanel.vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import SkeletonBlock from "@/components/common/SkeletonBlock.vue";
 import StatusBadge from "@/components/common/StatusBadge.vue";
+import { useBriefCreate, BUSINESS_TYPE_OPTIONS, businessTypeLabel } from "@/composables/useBriefCreate";
 
 const router = useRouter();
-const campaignStore = useCampaignStore();
+const workspaceStore = useWorkspaceStore();
 
-const BUSINESS_TYPE_LABELS = {
-  b2c_product: "B2C product",
-  b2b: "B2B",
-  services: "Services",
-  local: "Local business",
-  ecommerce: "E-commerce",
-  app: "App / software",
-};
+const briefs = computed(() => workspaceStore.briefs);
 
-function businessTypeLabel(value) {
-  return BUSINESS_TYPE_LABELS[value] || value;
-}
-
-const briefs = ref([]);
-const loading = ref(true);
 const showCreate = ref(false);
-const creating = ref(false);
-const uploading = ref(false);
-const formError = ref(null);
-const newName = ref("");
-const newContent = ref("");
-const newBusinessType = ref("");
-const contentMode = ref("text"); // "text" | "upload"
-const uploadFile = ref(null);
 const fileInput = ref(null);
+
+const { name, content, businessType, contentMode, file, creating, uploading, error, submit, reset } =
+  useBriefCreate({ onCreated: (brief) => workspaceStore.upsertBrief(brief) });
 
 const editingBrief = ref(null);
 const editName = ref("");
@@ -269,69 +240,32 @@ const editBusinessType = ref("");
 const saving = ref(false);
 
 function onFileChange(e) {
-  uploadFile.value = e.target.files?.[0] || null;
+  file.value = e.target.files?.[0] || null;
 }
 
 function onFileDrop(e) {
-  const file = e.dataTransfer.files?.[0];
-  if (file) {
-    uploadFile.value = file;
+  const dropped = e.dataTransfer.files?.[0];
+  if (dropped) {
+    file.value = dropped;
   }
 }
 
-async function loadBriefs() {
-  loading.value = true;
+async function handleCreate() {
   try {
-    const resp = await apiClient.get("/api/briefs");
-    briefs.value = resp.data.data;
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function createBrief() {
-  formError.value = null;
-  creating.value = true;
-  try {
-    // Step 1: create the brief record
-    const resp = await apiClient.post("/api/briefs", {
-      name: newName.value,
-      content: contentMode.value === "text" ? newContent.value : "",
-      business_type: newBusinessType.value || undefined,
-    });
-    let brief = resp.data.data;
-
-    // Step 2: if a file was selected, upload it to populate content
-    if (contentMode.value === "upload" && uploadFile.value) {
-      uploading.value = true;
-      const formData = new FormData();
-      formData.append("file", uploadFile.value);
-      const uploadResp = await apiClient.post(
-        `/api/briefs/${brief.id}/upload`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-      brief = uploadResp.data.data;
-      uploading.value = false;
-    }
-
-    briefs.value.unshift(brief);
+    await submit();
     showCreate.value = false;
-    newName.value = "";
-    newContent.value = "";
-    newBusinessType.value = "";
-    uploadFile.value = null;
-    contentMode.value = "text";
-  } catch (err) {
-    formError.value = err?.message || "Could not save this brief.";
-  } finally {
-    creating.value = false;
-    uploading.value = false;
+  } catch {
+    // Error already surfaced inline via the composable's `error` ref.
   }
 }
 
-function selectBrief(brief) {
-  campaignStore.selectBrief(brief.id);
+function cancelCreate() {
+  showCreate.value = false;
+  reset();
+}
+
+async function selectBrief(brief) {
+  await workspaceStore.switchTo(brief.id);
   router.push("/process");
 }
 
@@ -351,8 +285,7 @@ async function saveEdit() {
       content: editContent.value,
       business_type: editBusinessType.value || null,
     });
-    const idx = briefs.value.findIndex((b) => b.id === editingBrief.value.id);
-    if (idx !== -1) briefs.value[idx] = resp.data.data;
+    workspaceStore.upsertBrief(resp.data.data);
     editingBrief.value = null;
   } finally {
     saving.value = false;
@@ -362,11 +295,10 @@ async function saveEdit() {
 async function deleteBrief(id) {
   if (!confirm("Delete this brief and all its simulations?")) return;
   await apiClient.delete(`/api/briefs/${id}`);
-  briefs.value = briefs.value.filter((b) => b.id !== id);
-  if (campaignStore.brandBriefId === id) campaignStore.clearBrief();
+  workspaceStore.removeBrief(id);
 }
 
-onMounted(loadBriefs);
+onMounted(() => workspaceStore.loadBriefs({ force: true }));
 </script>
 
 <style scoped>
@@ -384,9 +316,11 @@ onMounted(loadBriefs);
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg, 0.75rem);
+  box-shadow: var(--glass-highlight);
   cursor: pointer;
   overflow: hidden;
   transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
@@ -394,8 +328,8 @@ onMounted(loadBriefs);
 }
 
 .brief-card:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.22);
+  border-color: var(--glass-border-glow);
+  box-shadow: var(--shadow-md), var(--glow-accent-sm), var(--glass-highlight);
   transform: translateY(-2px);
 }
 
@@ -410,7 +344,7 @@ onMounted(loadBriefs);
 
 .brief-card.is-active {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent), 0 4px 28px rgba(10,191,173,0.14);
+  box-shadow: 0 0 0 1px var(--color-accent), 0 4px 28px rgba(10,191,173,0.14), var(--glass-highlight);
 }
 
 .brief-card__active-bar {
@@ -600,9 +534,10 @@ onMounted(loadBriefs);
 .brief-create-form__input,
 .brief-create-form__textarea {
   padding: 0.625rem 0.875rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm, 0.5rem);
-  background: var(--color-bg);
+  background: var(--color-input-bg);
+  backdrop-filter: blur(8px);
   color: var(--color-text);
   font-size: 0.9375rem;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -636,8 +571,8 @@ onMounted(loadBriefs);
 .brief-create-form__source-tabs {
   display: flex;
   gap: 0.25rem;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 0.2rem;
   width: fit-content;
@@ -674,9 +609,10 @@ onMounted(loadBriefs);
   justify-content: center;
   gap: 0.5rem;
   min-height: 8rem;
-  border: 1.5px dashed var(--color-border);
+  border: 1.5px dashed var(--glass-border);
   border-radius: var(--radius-md, 0.625rem);
-  background: var(--color-bg);
+  background: var(--color-input-bg);
+  backdrop-filter: blur(8px);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   position: relative;
