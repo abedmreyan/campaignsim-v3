@@ -30,6 +30,28 @@ const PROJECT_KEY = "campaignsim_current_project";
 const STEP_KEY = "campaignsim_current_step";
 const VARIANTS_KEY = "campaignsim_variants";
 const MOCK_STATE_KEY = "campaignsim_mock_state";
+// { [briefId]: { simulationId, graphId } } — the last simulation actually
+// prepared (has twitter_profiles.csv on disk) for each brief. /api/simulation
+// /create mints a brand-new, unprepared simulation on every call with no
+// reuse logic server-side, so resumeBrief() must remember this itself or
+// every re-open of a brief (now trivial via the workspace switcher) silently
+// swaps in a throwaway simulation that fails at launch time.
+const PREPARED_SIM_KEY = "campaignsim_prepared_simulations";
+
+function getPreparedSimulation(briefId) {
+  if (!briefId) return null;
+  const map = readJson(PREPARED_SIM_KEY, {});
+  return map[briefId] || null;
+}
+
+function setPreparedSimulation(briefId, simulationId, graphId) {
+  if (!briefId || !simulationId || !graphId) return;
+  const map = readJson(PREPARED_SIM_KEY, {});
+  map[briefId] = { simulationId, graphId };
+  try {
+    localStorage.setItem(PREPARED_SIM_KEY, JSON.stringify(map));
+  } catch {}
+}
 
 function readJson(key, fallback) {
   try {
@@ -429,19 +451,32 @@ export const useCampaignStore = defineStore("campaign", {
         this.graph.statusText = "Loading graph…";
         await this.loadGraphRelations(graphId);
 
-        this.graph.statusText = "Creating simulation environment…";
-        const simData = await createSimulationProject({ projectId, graphId });
+        // Reuse the simulation that was actually prepared (has
+        // twitter_profiles.csv on disk) last time this brief's graph was
+        // ready, instead of always minting a fresh unprepared one — see
+        // PREPARED_SIM_KEY above for why this matters.
+        const cachedSim = getPreparedSimulation(briefId);
+        let simulationId;
+        let alreadyPrepared = false;
+        if (cachedSim && cachedSim.graphId === graphId) {
+          simulationId = cachedSim.simulationId;
+          alreadyPrepared = true;
+        } else {
+          this.graph.statusText = "Creating simulation environment…";
+          const simData = await createSimulationProject({ projectId, graphId });
+          simulationId = simData.simulation_id;
+        }
 
-        this.simulationId = simData.simulation_id;
+        this.simulationId = simulationId;
         this.graphId = graphId;
         this.uploadedFile = { filename: brief.name, size: (brief.content || "").length };
         this.project = {
           ...(this.project || {}),
-          simulation_id: simData.simulation_id,
+          simulation_id: simulationId,
           graph_id: graphId,
           project_id: projectId,
           project_name: brief.name,
-          status: "preparing",
+          status: alreadyPrepared ? "ready" : "preparing",
         };
         this.graph.progress = 100;
         this.persist();
@@ -478,6 +513,7 @@ export const useCampaignStore = defineStore("campaign", {
         }
         await this.loadGraphRelations(this.graphId);
         this.project = { ...(this.project || {}), status: "ready" };
+        setPreparedSimulation(this.brandBriefId, this.simulationId, this.graphId);
         this.persist();
         return task;
       } catch (error) {
