@@ -1,8 +1,10 @@
 """
 Embedding generation for the local knowledge graph.
 
-Primary:  OpenAI-compatible ``/v1/embeddings`` endpoint
-          (same provider already configured for LLM calls).
+Primary:  OpenAI-compatible ``/v1/embeddings`` endpoint, configured via
+          EMBEDDING_API_KEY/EMBEDDING_BASE_URL — separate from the chat LLM
+          config, since not every chat provider (e.g. DeepSeek) exposes
+          embeddings. Falls back to the chat LLM's own credentials if unset.
 Fallback: feature hashing (HashingVectorizer) via scikit-learn, used when
           the embeddings endpoint is unavailable or returns an error.
 
@@ -50,9 +52,9 @@ class Embedder:
     ):
         from ...config import Config  # lazy import to avoid circular deps
 
-        self._api_key = api_key or Config.LLM_API_KEY or ""
-        self._base_url = base_url or Config.LLM_BASE_URL or "https://api.openai.com/v1"
-        self._model = model or _EMBEDDING_MODEL
+        self._api_key = api_key or Config.EMBEDDING_API_KEY or ""
+        self._base_url = base_url or Config.EMBEDDING_BASE_URL or "https://api.openai.com/v1"
+        self._model = model or Config.EMBEDDING_MODEL_NAME or _EMBEDDING_MODEL
 
         self._api_available: Optional[bool] = None  # None = not yet probed
         self._dim: Optional[int] = None

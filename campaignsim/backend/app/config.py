@@ -40,6 +40,14 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
+
+    # Embeddings — separate from the chat LLM above because not every chat
+    # provider (e.g. DeepSeek) exposes a /v1/embeddings endpoint. Falls back
+    # to the chat LLM's own credentials/endpoint if unset, so a single-provider
+    # setup (e.g. plain OpenAI for both) still works with no extra config.
+    EMBEDDING_API_KEY = os.environ.get('EMBEDDING_API_KEY') or LLM_API_KEY
+    EMBEDDING_BASE_URL = os.environ.get('EMBEDDING_BASE_URL') or 'https://api.openai.com/v1'
+    EMBEDDING_MODEL_NAME = os.environ.get('EMBEDDING_MODEL_NAME', 'text-embedding-3-small')
     
     # Platform database (Postgres) — identity, briefs, personas, campaign metadata
     SQLALCHEMY_DATABASE_URI = os.environ.get(
