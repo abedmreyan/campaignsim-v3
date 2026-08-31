@@ -285,8 +285,15 @@ async def run_simulation(config_path: str):
             if c.get("agent_id") != brand_agent_id
         ]
     else:
-        # Fallback: skip agent 0 (brand), use all others
-        total = agent_graph.graph.number_of_nodes() if hasattr(agent_graph, 'graph') else 50
+        # Fallback: skip agent 0 (brand), use all others.
+        # AgentGraph wraps igraph (or Neo4j), not networkx — .graph has no
+        # .number_of_nodes(); AgentGraph.get_num_nodes() is the correct public
+        # accessor and handles both backends. This branch runs whenever the
+        # variant's simulation_config.json has no agent_configs (e.g. a
+        # simulation whose personas came from /api/simulation/generate-profiles
+        # rather than /api/simulation/prepare, which is the common case via
+        # the UI), so it needs to actually work, not just exist as a stub.
+        total = agent_graph.get_num_nodes() if hasattr(agent_graph, 'get_num_nodes') else 50
         persona_ids = list(range(1, total))
 
     if not persona_ids:
