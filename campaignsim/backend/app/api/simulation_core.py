@@ -8,12 +8,12 @@ rest of the former file)."""
 import json
 import os
 import traceback
-from flask import request, jsonify, send_file, g
+from flask import request, jsonify, send_file, g, current_app
 
 from . import simulation_bp
 from ..config import Config
 from ..extensions import db
-from ..models.orm import SimulationRecord, BrandBrief
+from ..models.orm import SimulationRecord, BrandBrief, Persona
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
@@ -1219,6 +1219,9 @@ def generate_profiles():
         # background thread doesn't need Flask's request-scoped `g`.
         owning_brief_for_graph = BrandBrief.query.filter_by(graph_id=graph_id).first()
         business_type = owning_brief_for_graph.business_type if owning_brief_for_graph else None
+        brief_id_for_persistence = owning_brief_for_graph.id if owning_brief_for_graph else None
+        user_id_for_persistence = g.current_user.id
+        app_obj = current_app._get_current_object()
 
         # Quick entity count check before spawning the thread
         reader = ZepEntityReader()
@@ -1310,6 +1313,37 @@ def generate_profiles():
                         logger.info(f"Saved {len(profiles)} profiles to disk for simulation {simulation_id}")
                     except Exception as save_err:
                         logger.warning(f"Could not save profiles to disk: {save_err}")
+
+                # Persist to the personas table too — this is the only durable
+                # copy across sessions/switches. Without this, generated
+                # personas exist only as a simulation-scoped file on disk and
+                # in the frontend's in-memory/localStorage state, so resuming
+                # a brief later (resumeBrief) has nothing to reload from
+                # /api/briefs/<id>/personas and the user has to regenerate.
+                if brief_id_for_persistence:
+                    try:
+                        with app_obj.app_context():
+                            # Replace, not append — regenerating personas for a
+                            # brief should reflect the new batch, not accumulate
+                            # every prior generation.
+                            Persona.query.filter_by(
+                                user_id=user_id_for_persistence,
+                                brand_brief_id=brief_id_for_persistence,
+                            ).delete()
+                            for profile, profile_data in zip(profiles, profiles_data):
+                                db.session.add(Persona(
+                                    user_id=user_id_for_persistence,
+                                    brand_brief_id=brief_id_for_persistence,
+                                    external_id=str(getattr(profile, "user_id", "")),
+                                    source="kg",
+                                    data=profile_data,
+                                ))
+                            db.session.commit()
+                        logger.info(
+                            f"Saved {len(profiles)} personas to database for brief {brief_id_for_persistence}"
+                        )
+                    except Exception as db_err:
+                        logger.warning(f"Could not save personas to database: {db_err}")
 
                 task_manager.complete_task(task_id, result={
                     "platform": platform,

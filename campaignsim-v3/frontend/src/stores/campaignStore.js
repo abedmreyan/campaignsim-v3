@@ -479,6 +479,14 @@ export const useCampaignStore = defineStore("campaign", {
           status: alreadyPrepared ? "ready" : "preparing",
         };
         this.graph.progress = 100;
+
+        // Restore any personas already generated for this brief — without
+        // this, switching away and back (or a page refresh after a switch,
+        // since resetProject() clears the localStorage snapshot) makes
+        // fully-generated personas look gone even though they're saved
+        // server-side, forcing an unnecessary regeneration.
+        await this.loadPersonas(briefId);
+
         this.persist();
         return "ready";
       } catch (error) {
