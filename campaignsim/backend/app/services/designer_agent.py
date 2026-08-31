@@ -114,6 +114,7 @@ class DesignerAgent:
                 return "No relevant brand context found for that query."
             return "Brand knowledge graph facts:\n" + "\n".join(f"- {f}" for f in facts[:8])
         except Exception as e:
+            logger.exception(f"kg_search failed for graph {self._brief.graph_id}: {e}")
             return f"Graph search failed: {e}"
 
     def _tool_list_channels(self) -> str:
@@ -150,6 +151,7 @@ class DesignerAgent:
             manager = SimulationManager()
             profiles = manager.get_profiles(self._sim_record.sim_key, platform="reddit")
         except Exception as e:
+            logger.exception(f"audience_overview failed for simulation {self._sim_record.sim_key}: {e}")
             return f"Could not read the persona roster: {e}"
 
         personas = [p for p in profiles if str(p.get("user_id")) != "0"]
@@ -488,8 +490,15 @@ class DesignerAgent:
                     try:
                         tool_input = json.loads(tc.function.arguments)
                     except Exception:
+                        logger.warning(
+                            f"Malformed tool-call arguments for '{tool_name}': {tc.function.arguments!r}"
+                        )
                         tool_input = {}
-                    result = self._call_tool(tool_name, tool_input)
+                    try:
+                        result = self._call_tool(tool_name, tool_input)
+                    except Exception as e:
+                        logger.exception(f"Tool '{tool_name}' failed with input {tool_input}: {e}")
+                        result = f"Tool '{tool_name}' failed: {e}"
                     tool_calls_log.append({
                         "tool": tool_name, "input": tool_input, "output_preview": result[:300],
                     })

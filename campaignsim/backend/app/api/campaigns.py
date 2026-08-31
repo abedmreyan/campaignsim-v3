@@ -145,6 +145,30 @@ def launch_variant():
             f"channel={channel}, pid={state.process_pid}"
         )
 
+        # Record ownership + a campaign-history row, matching ab_test's pattern —
+        # without this, a variant launched through this endpoint runs for real
+        # but never shows up in campaign history/reports, since those are all
+        # read from the campaigns/campaign_variants tables, not the filesystem.
+        try:
+            parent_sim = SimulationRecord.query.filter_by(sim_key=simulation_id).first()
+            campaign_record = CampaignRecord(
+                user_id=g.current_user.id,
+                brand_brief_id=parent_sim.brand_brief_id if parent_sim else None,
+                campaign_ref=variant_sim_id,
+            )
+            db.session.add(campaign_record)
+            db.session.flush()
+            db.session.add(CampaignVariantRecord(
+                campaign_id=campaign_record.id,
+                variant_ref=variant_id,
+                channel=channel,
+                status=state.runner_status,
+            ))
+            db.session.commit()
+        except Exception as db_err:
+            db.session.rollback()
+            logger.exception(f"Could not record campaign history for {variant_sim_id}: {db_err}")
+
         return jsonify({
             "success": True,
             "data": {
