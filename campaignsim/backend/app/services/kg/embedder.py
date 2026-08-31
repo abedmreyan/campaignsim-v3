@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from ...utils.logger import get_logger
@@ -32,6 +33,7 @@ logger = get_logger("campaignsim.kg.embedder")
 _EMBEDDING_MODEL = "text-embedding-3-small"
 _EMBEDDING_DIM_TFIDF = 256  # SVD target dimension for fallback vectors
 _BATCH_SIZE = 100           # max texts per API call
+_COOLDOWN_SECONDS = 60      # after a failure, skip the real API for this long before retrying
 
 
 class Embedder:
@@ -56,7 +58,13 @@ class Embedder:
         self._base_url = base_url or Config.EMBEDDING_BASE_URL or "https://api.openai.com/v1"
         self._model = model or Config.EMBEDDING_MODEL_NAME or _EMBEDDING_MODEL
 
-        self._api_available: Optional[bool] = None  # None = not yet probed
+        # Epoch (time.monotonic) until which the real API is skipped in favor
+        # of the fallback — 0 means "never failed, always try it". A single
+        # failure used to latch this off permanently for the process's whole
+        # lifetime (a transient rate-limit or network blip meant every graph
+        # search silently used the weaker fallback until the next restart);
+        # a bounded cooldown lets it self-heal instead.
+        self._unavailable_until: float = 0.0
         self._dim: Optional[int] = None
         self._lock = threading.Lock()
 
@@ -69,16 +77,17 @@ class Embedder:
         if not texts:
             return []
         clean = [t.replace("\n", " ").strip() for t in texts]
-        try:
-            if self._api_available is not False:
+        if time.monotonic() >= self._unavailable_until:
+            try:
                 result = self._embed_via_api(clean)
-                self._api_available = True
+                self._unavailable_until = 0.0  # success — clear any prior cooldown
                 return result
-        except Exception as exc:
-            logger.warning(
-                f"Embedding API unavailable ({exc!s:.120}), switching to TF-IDF fallback"
-            )
-            self._api_available = False
+            except Exception as exc:
+                logger.warning(
+                    f"Embedding API unavailable ({exc!s:.120}), "
+                    f"falling back to TF-IDF for {_COOLDOWN_SECONDS}s"
+                )
+                self._unavailable_until = time.monotonic() + _COOLDOWN_SECONDS
 
         return self._embed_via_tfidf(clean)
 
