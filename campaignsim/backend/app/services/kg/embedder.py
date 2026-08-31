@@ -87,21 +87,34 @@ class Embedder:
         return result[0] if result else []
 
     # ------------------------------------------------------------------
-    # OpenAI-compatible API
+    # OpenAI-shaped embeddings API (OpenAI itself, Voyage AI, or any other
+    # provider whose /embeddings endpoint accepts {input, model} and returns
+    # {data: [{embedding, index}]}) — called directly via requests instead of
+    # the openai SDK, since the SDK's response model validates fields (e.g.
+    # usage.prompt_tokens) that a third-party provider like Voyage doesn't
+    # always send, and this only ever reads .data[].embedding/.index anyway.
     # ------------------------------------------------------------------
 
     def _embed_via_api(self, texts: List[str]) -> List[List[float]]:
-        from openai import OpenAI
+        import requests
 
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
+        url = f"{self._base_url.rstrip('/')}/embeddings"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
         all_embeddings: List[List[float]] = []
 
         for i in range(0, len(texts), _BATCH_SIZE):
             batch = texts[i : i + _BATCH_SIZE]
-            response = client.embeddings.create(input=batch, model=self._model)
+            response = requests.post(
+                url, headers=headers, json={"input": batch, "model": self._model}, timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()["data"]
             # Sort by index to handle any re-ordering
-            sorted_data = sorted(response.data, key=lambda d: d.index)
-            all_embeddings.extend([d.embedding for d in sorted_data])
+            sorted_data = sorted(data, key=lambda d: d["index"])
+            all_embeddings.extend([d["embedding"] for d in sorted_data])
 
         if all_embeddings and self._dim is None:
             self._dim = len(all_embeddings[0])
