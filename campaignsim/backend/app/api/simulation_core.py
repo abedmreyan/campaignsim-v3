@@ -1302,15 +1302,29 @@ def generate_profiles():
                     try:
                         from ..services.simulation_manager import SimulationManager
                         mgr = SimulationManager()
+                        sim_dir = mgr._get_simulation_dir(simulation_id)
                         generator.save_profiles(
                             profiles=profiles,
-                            file_path=os.path.join(
-                                mgr._get_simulation_dir(simulation_id),
-                                f"{platform}_profiles.json"
-                            ),
+                            file_path=os.path.join(sim_dir, f"{platform}_profiles.json"),
                             platform=platform
                         )
                         logger.info(f"Saved {len(profiles)} profiles to disk for simulation {simulation_id}")
+
+                        # variant_runner.py requires twitter_profiles.csv to launch
+                        # ANY variant, unconditionally, regardless of which platform
+                        # was requested here — it's the only format OASIS agent
+                        # simulation consumes. /api/simulation/prepare also writes
+                        # this file, but this endpoint (Step 2's "Generate personas"
+                        # button, what the UI actually calls) is not guaranteed to
+                        # run after it, so write it here too whenever it's missing
+                        # so a launch never fails on a step this endpoint can satisfy
+                        # itself.
+                        if platform != "twitter":
+                            generator.save_profiles(
+                                profiles=profiles,
+                                file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
+                                platform="twitter"
+                            )
                     except Exception as save_err:
                         logger.warning(f"Could not save profiles to disk: {save_err}")
 
