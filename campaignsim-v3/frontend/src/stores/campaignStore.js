@@ -790,8 +790,16 @@ export const useCampaignStore = defineStore("campaign", {
           const totalPct = this.simulationRun.variants.reduce((s, v) => s + (v.progress || 0), 0);
           this.simulationRun.progress = Math.round(totalPct / Math.max(1, this.simulationRun.variants.length));
           if (allDone) {
-            this.simulationRun.status = "completed";
-            this.project = { ...(this.project || {}), status: "completed" };
+            // all_done means every variant reached a terminal state, not that
+            // any of them succeeded — treating that as "completed" regardless
+            // showed a green "Simulation complete" banner with every variant
+            // marked Failed and 0% progress, and let the user attempt to
+            // generate an insights report from zero successful variants
+            // (canNavigateToStep(4)/simulationCompleted both gate on this
+            // same status), which just hung forever with nothing to score.
+            const anySucceeded = data.completed > 0;
+            this.simulationRun.status = anySucceeded ? "completed" : "failed";
+            this.project = { ...(this.project || {}), status: this.simulationRun.status };
           } else {
             this.simulationRun.status = "running";
           }
