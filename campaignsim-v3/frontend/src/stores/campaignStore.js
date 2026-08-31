@@ -23,6 +23,7 @@ import {
   getReport,
   interviewPersona as interviewPersonaApi,
   getHistory,
+  getCampaignsForBrief,
 } from "@/api/campaignApi";
 import { getBrief, rebuildGraph as rebuildGraphApi } from "@/api/briefApi";
 
@@ -486,6 +487,28 @@ export const useCampaignStore = defineStore("campaign", {
         // fully-generated personas look gone even though they're saved
         // server-side, forcing an unnecessary regeneration.
         await this.loadPersonas(briefId);
+
+        // Same restoration as personas, for the same reason: a generated
+        // campaign report is safely persisted server-side (inside the
+        // campaign's JSON file), but campaignId/report.data are wiped by
+        // resetProject() on every switch and resumeBrief() never re-fetched
+        // them, so a finished report looked gone until the user regenerated
+        // it — for no reason, since nothing was actually lost.
+        try {
+          const recentCampaigns = await getCampaignsForBrief(briefId, { limit: 1 });
+          const recent = recentCampaigns?.[0];
+          if (recent?.campaign_id) {
+            this.campaignId = recent.campaign_id;
+            if (recent.has_report) {
+              await this.loadCampaignReport(recent.campaign_id);
+            } else if (recent.overall_status === "completed" || recent.overall_status === "failed") {
+              this.simulationRun.status = recent.overall_status;
+            }
+          }
+        } catch {
+          // Non-fatal — resuming the brief's graph/personas still succeeds
+          // without restoring campaign history.
+        }
 
         this.persist();
         return "ready";

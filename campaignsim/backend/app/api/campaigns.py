@@ -686,20 +686,26 @@ def list_campaigns():
 
     Query params:
         limit (int, default 50) — max campaigns to return
+        brief_id (optional) — only campaigns belonging to this brand brief
     """
     try:
         limit = int(request.args.get("limit", 50))
+        brief_id = request.args.get("brief_id")
         campaigns_dir = _campaigns_dir()
 
         # Campaign JSON files carry no owner field of their own — ownership is
         # tracked in the campaigns table (campaign_ref -> user_id), same as
         # everywhere else. Legacy files with no matching row are excluded
         # rather than shown to everyone.
-        owned_refs = {
-            rec.campaign_ref
-            for rec in CampaignRecord.query.filter_by(user_id=g.current_user.id).all()
+        record_query = CampaignRecord.query.filter_by(user_id=g.current_user.id)
+        if brief_id:
+            record_query = record_query.filter_by(brand_brief_id=brief_id)
+        brief_id_by_ref = {
+            rec.campaign_ref: str(rec.brand_brief_id) if rec.brand_brief_id else None
+            for rec in record_query.all()
             if rec.campaign_ref
         }
+        owned_refs = set(brief_id_by_ref.keys())
 
         items = []
         for fname in os.listdir(campaigns_dir):
@@ -732,6 +738,7 @@ def list_campaigns():
             items.append({
                 "campaign_id":   data.get("campaign_id"),
                 "simulation_id": data.get("simulation_id"),
+                "brand_brief_id": brief_id_by_ref.get(campaign_ref),
                 "brand_name":    data.get("brand_name", ""),
                 "campaign_goal": data.get("campaign_goal", ""),
                 "created_at":    data.get("created_at"),

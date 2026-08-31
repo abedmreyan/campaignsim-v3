@@ -114,6 +114,12 @@ export async function getHistory() {
   return unwrap(await apiClient.get(endpoints.simulationHistory));
 }
 
+export async function getCampaignsForBrief(briefId, { limit = 1 } = {}) {
+  return unwrap(
+    await apiClient.get(endpoints.simulationHistory, { params: { brief_id: briefId, limit } }),
+  );
+}
+
 export async function suggestBrandIntel(payload) {
   return unwrap(await apiClient.post(endpoints.suggestBrandIntel, payload));
 }
