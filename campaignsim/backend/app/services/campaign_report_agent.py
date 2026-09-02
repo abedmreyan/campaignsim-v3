@@ -164,6 +164,9 @@ class CampaignReportAgent:
                     try:
                         tool_input = json.loads(tc.function.arguments)
                     except Exception:
+                        logger.warning(
+                            f"Malformed tool-call arguments for '{tool_name}': {tc.function.arguments!r}"
+                        )
                         tool_input = {}
 
                     result = self._call_tool(tool_name, tool_input)

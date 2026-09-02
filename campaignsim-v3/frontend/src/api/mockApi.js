@@ -13,6 +13,19 @@ const state = {
 
 const mock = () => getMockData();
 
+// Mirrors app/data/builtin_channels.json's shape (trimmed to what the UI needs).
+const MOCK_CHANNELS = [
+  { id: "builtin-instagram", key: "instagram", name: "Instagram", kind: "feed", formats: ["VideoAd", "CarouselPost", "StoryAd", "Reel"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-tiktok", key: "tiktok", name: "TikTok", kind: "feed", formats: ["ShortFormVideo", "VideoAd", "Challenge"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-x", key: "x", name: "X (Twitter)", kind: "feed", formats: ["TextPost", "ImagePost", "VideoAd", "Thread"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-linkedin", key: "linkedin", name: "LinkedIn", kind: "feed", formats: ["SponsoredPost", "ThoughtLeadership", "DocumentPost"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-facebook", key: "facebook", name: "Facebook", kind: "feed", formats: ["VideoAd", "CarouselPost", "ImagePost", "EventPost"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-youtube-shorts", key: "youtube-shorts", name: "YouTube Shorts", kind: "feed", formats: ["ShortFormVideo", "PreRollAd"], is_builtin: true, mechanics: { max_rounds_default: 10 } },
+  { id: "builtin-email", key: "email", name: "Email", kind: "direct", formats: ["EmailNewsletter", "EmailPromo", "DripSequence"], is_builtin: true, mechanics: { max_rounds_default: 5 } },
+  { id: "builtin-sms_whatsapp", key: "sms_whatsapp", name: "SMS / WhatsApp", kind: "direct", formats: ["SMSBlast", "WhatsAppBroadcast"], is_builtin: true, mechanics: { max_rounds_default: 5 } },
+];
+let mockCustomChannels = [];
+
 export async function healthCheck() {
   await delay(180);
   return {
@@ -80,7 +93,7 @@ export async function getGraphProject() {
   };
 }
 
-export async function prepareGraph({ simulation_id, graph_id }) {
+export async function prepareGraph({ simulation_id, graph_id, fan_out }) {
   await delay(400);
   state.preparationProgress = 0;
   return {
@@ -304,10 +317,9 @@ export async function generateProfiles({ simulation_id, count = 30 }) {
   };
 }
 
-export async function getProfiles() {
-  await delay(650);
+function buildMockPersonas() {
   const basePersonas = clone(mock().personas);
-  const personas = Array.from({ length: state.personaCount }, (_item, index) => {
+  return Array.from({ length: state.personaCount }, (_item, index) => {
     const base = basePersonas[index % basePersonas.length];
     const suffix = index < basePersonas.length ? "" : ` ${index + 1}`;
     return {
@@ -317,8 +329,21 @@ export async function getProfiles() {
       name: `${base.name}${suffix}`,
     };
   });
+}
+
+export async function getProfiles() {
+  await delay(650);
   return {
-    personas,
+    personas: buildMockPersonas(),
+  };
+}
+
+export async function getProfileGenerationStatus() {
+  await delay(400);
+  return {
+    status: "completed",
+    progress: 100,
+    result: { profiles: buildMockPersonas() },
   };
 }
 
@@ -421,4 +446,40 @@ export async function getHistory() {
   return {
     items: clone(mock().history),
   };
+}
+
+export async function getChannels() {
+  await delay(250);
+  return clone([...MOCK_CHANNELS, ...mockCustomChannels]);
+}
+
+export async function draftChannel({ description }) {
+  await delay(700);
+  const key = (description || "custom_channel").toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) || "custom_channel";
+  return {
+    key,
+    name: description?.slice(0, 40) || "Custom Channel",
+    kind: "direct",
+    available_actions: ["do_nothing", "like_post", "create_post", "follow"],
+    action_weights: { do_nothing: 0.0, like_post: 0.3, create_post: 0.5, follow: 0.6 },
+    funnel_map: { attention: ["like_post"], engagement: ["create_post"], amplification: [], intent: ["follow"] },
+    formats: ["CustomFormat"],
+    framing_template: `[${description?.slice(0, 20) || "Custom"} {format}] {headline}`,
+    mechanics: { visibility: "private", activation: "scheduled", max_rounds_default: 5 },
+    description: description || "",
+    weights_rationale: "Demo mode draft — mock data, not LLM-generated.",
+  };
+}
+
+export async function createChannel(definition) {
+  await delay(400);
+  const channel = { ...definition, id: `custom-${definition.key}-${Date.now()}`, is_builtin: false };
+  mockCustomChannels.push(channel);
+  return clone(channel);
+}
+
+export async function deleteChannel(channelId) {
+  await delay(300);
+  mockCustomChannels = mockCustomChannels.filter((c) => c.id !== channelId);
+  return { success: true };
 }

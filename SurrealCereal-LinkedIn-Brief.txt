@@ -1,0 +1,61 @@
+SURREAL CEREAL — UNCONVENTIONAL CHANNEL CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published Surreal Cereal marketing case studies and trade coverage (UK brand-building strategy, ongoing)
+
+=== BRAND OVERVIEW ===
+
+Surreal is a UK-based "nutritional cereal" challenger brand — zero added sugar, high protein, positioned against legacy cereal giants with far larger advertising budgets. As a small challenger, Surreal cannot win on media spend, so its strategy depends on being talked about by the right people rather than reached by the most people.
+
+Brand values: Irreverent, confident, in on the joke, deliberately unlike typical food advertising.
+Market positioning: A disruptor brand that markets itself the way an industry insider would mock a cereal ad, not the way a cereal ad is normally made.
+
+=== THE CAMPAIGN CONCEPT ===
+
+Surreal built its marketing around stunt-style, self-aware content (fake celebrity endorsements using regular people who happen to share famous names, jokes that lampoon advertising conventions) designed to be shared specifically by people who work in marketing and advertising. The open strategic question is which platform to make the primary home for this voice: a professional-network platform not typically used by food brands, or the conventional lifestyle/food-brand platform.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The Marketing & Advertising Industry Professional
+Age: 24–45.
+Psychographics: Works in or around marketing/advertising, has high tolerance (even appetite) for ads that mock advertising conventions, shares content with industry peers to signal taste and in-group knowledge. Professional context, scrolling during work hours.
+Platforms: A professional networking platform, used primarily for career content, industry news, and professional commentary — not typically a place to see consumer food brands post.
+Buying behaviour: Becomes an unpaid advocate when a brand's content is "for them" specifically; purchase decision is often secondary to the social signal of sharing/commenting.
+Ad response: Actively engages with and shares content that reads as a knowing wink to industry insiders; ignores anything that reads as a normal product ad.
+
+Segment 2 — The Health-Conscious Grocery Shopper
+Age: 25–50.
+Psychographics: Actively reads nutrition labels, compares protein/sugar content across cereal brands, shops with health goals in mind. Lifestyle-oriented social media use — follows food and wellness brands for product info and inspiration.
+Platforms: A lifestyle/visual platform used for food photography, product shots, and brand storytelling — the conventional home for a food brand's content.
+Buying behaviour: Influenced by clear nutritional claims and appealing product photography; comparison-shops based on health attributes.
+Ad response: Responds to clean, appetizing product imagery and clear nutritional benefit messaging; less interested in industry in-jokes.
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Build category-disrupting brand awareness and a loyal following for a new entrant in a category dominated by brands with vastly larger ad budgets.
+
+Context: Surreal's marketing team is deciding where to place primary creative weight — an unconventional professional-network platform where a food brand's presence is itself part of the joke, or the conventional food/lifestyle platform most cereal brands use — to determine which builds a stronger following and engagement base.
+
+Target metric: Follower growth rate and engagement rate (likes, comments, shares) relative to content posted.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Wrong Platform, On Purpose" (industry-insider post on a professional network)
+Headline: We know cereal ads don't belong here. That's why we're here.
+Body: A self-aware post lampooning typical advertising clichés, written for people who make ads for a living — not for people looking for breakfast inspiration.
+CTA: Follow if you get it
+Target segment: Marketing & Advertising Industry Professional (Segment 1)
+Channel: LinkedIn
+Format: SponsoredPost
+
+VARIANT B — "Look Inside the Box" (product storytelling carousel on a lifestyle platform)
+Headline: Zero added sugar. All the crunch.
+Body: A multi-image carousel walking through the product — ingredients, nutrition facts, and serving inspiration — in the clean, appetizing style shoppers expect from a food brand.
+CTA: See the nutrition facts
+Target segment: Health-Conscious Grocery Shopper (Segment 2)
+Channel: Instagram
+Format: CarouselPost
+
+=== BRAND VOICE ===
+
+Tone: Confident, dry, self-aware, willing to make fun of advertising itself.
+We never explain that we're being funny on purpose — the audience either gets it or they're not who we're talking to.

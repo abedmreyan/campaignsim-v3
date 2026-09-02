@@ -196,7 +196,8 @@
         </div>
       </section>
 
-      
+
+      <ProjectLibrary />
       <HistoryDatabase />
     </div>
   <!-- Marketing Summary added by Antigravity -->
@@ -207,6 +208,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
+import ProjectLibrary from '../components/ProjectLibrary.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LockScrollCards from '../components/LockScrollCards.vue'
 import { getMarketingMetrics } from '../api/marketingData.js'

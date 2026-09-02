@@ -1,0 +1,199 @@
+[
+  {
+    "key": "instagram",
+    "name": "Instagram",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "quote_post", "follow", "purchase_product"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.35,
+      "follow": 0.45,
+      "quote_post": 0.5,
+      "repost": 0.55,
+      "purchase_product": 0.9
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost", "quote_post"],
+      "intent": ["follow", "purchase_product"]
+    },
+    "formats": ["VideoAd", "CarouselPost", "StoryAd", "Reel"],
+    "framing_template": "[Instagram {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Visual, feed-based social channel with native shopping.",
+    "weights_rationale": "Progression follows engagement depth (like < comment < follow < share); purchase_product is weighted highest as the strongest observable conversion signal available on a commerce-capable feed."
+  },
+  {
+    "key": "tiktok",
+    "name": "TikTok",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "follow", "purchase_product"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.35,
+      "follow": 0.4,
+      "repost": 0.6,
+      "purchase_product": 0.9
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost"],
+      "intent": ["follow", "purchase_product"]
+    },
+    "formats": ["ShortFormVideo", "VideoAd", "Challenge"],
+    "framing_template": "[TikTok {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Short-form video, virality-driven feed channel.",
+    "weights_rationale": "Share (repost) weighted above follow — TikTok's growth mechanic is duet/share-driven virality rather than accumulating followers."
+  },
+  {
+    "key": "x",
+    "name": "X (Twitter)",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "quote_post", "follow"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.4,
+      "follow": 0.45,
+      "quote_post": 0.5,
+      "repost": 0.5
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost", "quote_post"],
+      "intent": ["follow"]
+    },
+    "formats": ["TextPost", "ImagePost", "VideoAd", "Thread"],
+    "framing_template": "[X {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Text-first, real-time, conversation-driven feed channel.",
+    "weights_rationale": "Reply (create_post) weighted close to share — X engagement is conversational; quote and repost treated as equally strong amplification."
+  },
+  {
+    "key": "linkedin",
+    "name": "LinkedIn",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "follow"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.45,
+      "repost": 0.4,
+      "follow": 0.6
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost"],
+      "intent": ["follow"]
+    },
+    "formats": ["SponsoredPost", "ThoughtLeadership", "DocumentPost"],
+    "framing_template": "[LinkedIn {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Professional B2B feed channel.",
+    "weights_rationale": "Follow (connect) weighted highest — a professional connection is a stronger B2B intent signal than a share; comments outweigh reposts since professional engagement is discussion-driven."
+  },
+  {
+    "key": "facebook",
+    "name": "Facebook",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "follow", "purchase_product"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.35,
+      "follow": 0.4,
+      "repost": 0.5,
+      "purchase_product": 0.85
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost"],
+      "intent": ["follow", "purchase_product"]
+    },
+    "formats": ["VideoAd", "CarouselPost", "ImagePost", "EventPost"],
+    "framing_template": "[Facebook {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Broad-demographic feed channel with native shopping and events.",
+    "weights_rationale": "Mirrors Instagram's progression (Meta commerce-capable feed) with slightly lower purchase weight reflecting an older, less shopping-native audience."
+  },
+  {
+    "key": "youtube-shorts",
+    "name": "YouTube Shorts",
+    "kind": "feed",
+    "available_actions": ["do_nothing", "like_post", "create_post", "repost", "follow"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.25,
+      "create_post": 0.35,
+      "follow": 0.5,
+      "repost": 0.55
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": ["repost"],
+      "intent": ["follow"]
+    },
+    "formats": ["ShortFormVideo", "PreRollAd"],
+    "framing_template": "[YouTube Shorts {format}] {headline}",
+    "mechanics": {"visibility": "public", "activation": "continuous", "max_rounds_default": 10},
+    "description": "Short-form vertical video feed channel.",
+    "weights_rationale": "Subscribe (follow) weighted high — YouTube's core growth metric is subscription, not shares."
+  },
+  {
+    "key": "email",
+    "name": "Email",
+    "kind": "direct",
+    "available_actions": ["do_nothing", "like_post", "create_post", "follow", "mute"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.3,
+      "create_post": 0.55,
+      "follow": 0.6,
+      "mute": -0.3
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": [],
+      "intent": ["follow"]
+    },
+    "formats": ["EmailNewsletter", "EmailPromo", "DripSequence"],
+    "framing_template": "[Email {format}] Subject: {email_subject} — {headline}",
+    "mechanics": {"visibility": "private", "activation": "scheduled", "max_rounds_default": 5},
+    "description": "One-to-one delivered channel — no social propagation between recipients.",
+    "weights_rationale": "like_post/create_post/follow are used as proxies for open/reply/re-engage (see channel mapping doc); mute is a negative-weighted unsubscribe signal, matching real email deliverability economics where unsubscribes actively hurt a sender's standing."
+  },
+  {
+    "key": "sms_whatsapp",
+    "name": "SMS / WhatsApp",
+    "kind": "direct",
+    "available_actions": ["do_nothing", "like_post", "create_post", "follow", "mute"],
+    "action_weights": {
+      "do_nothing": 0.0,
+      "like_post": 0.3,
+      "create_post": 0.6,
+      "follow": 0.55,
+      "mute": -0.35
+    },
+    "funnel_map": {
+      "attention": ["like_post"],
+      "engagement": ["create_post"],
+      "amplification": [],
+      "intent": ["follow"]
+    },
+    "formats": ["SMSBlast", "WhatsAppBroadcast"],
+    "framing_template": "[SMS/WhatsApp {format}] {headline}",
+    "mechanics": {"visibility": "private", "activation": "scheduled", "max_rounds_default": 5},
+    "description": "One-to-one messaging channel — highest attention, highest opt-out sensitivity.",
+    "weights_rationale": "Reply weighted highest of any channel — SMS/WhatsApp reply rates are the strongest real-world intent signal in messaging marketing; opt-out (mute) penalized more heavily than email given stricter consent norms."
+  }
+]

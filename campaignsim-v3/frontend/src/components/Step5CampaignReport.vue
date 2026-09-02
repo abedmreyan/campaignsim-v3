@@ -112,10 +112,33 @@
         </table>
       </div>
 
+      <!-- Engagement over rounds + funnel breakdown -->
+      <div v-if="scoredVariants.length > 0" class="charts-section theme-scope">
+        <div class="chart-block">
+          <h3 class="section-title">Engagement per round</h3>
+          <PerRoundChart :variants="scoredVariants" />
+        </div>
+        <div v-if="topFunnel" class="chart-block">
+          <h3 class="section-title">Funnel — {{ scoredVariants[0].variant_name || scoredVariants[0].variant_id }}</h3>
+          <FunnelChart :funnel="topFunnel" />
+        </div>
+      </div>
+
       <!-- Full Report Text -->
       <div v-if="reportText" class="full-report-section">
         <h3 class="section-title">Full Analysis Report</h3>
         <div class="report-markdown" v-html="renderMarkdown(reportText)"></div>
+      </div>
+
+      <!-- Insight Agent + Iteration Lineage -->
+      <div class="insight-section">
+        <div class="insight-section__header">
+          <h3 class="section-title">Iterate on this campaign</h3>
+          <RouterLink :to="{ name: 'IterationCompare', params: { campaignId } }" class="iteration-history-link">
+            View iteration history →
+          </RouterLink>
+        </div>
+        <InsightChatPanel :campaign-id="campaignId" />
       </div>
     </div>
 
@@ -134,7 +157,10 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { generateCampaignRecommendations, getCampaignReport, getAbStatus } from '../api/simulation'
+import { generateCampaignRecommendations, getCampaignReport, getAbStatus } from '@/api/campaignApi'
+import PerRoundChart from './reports/PerRoundChart.vue'
+import FunnelChart from './reports/FunnelChart.vue'
+import InsightChatPanel from './reports/InsightChatPanel.vue'
 
 const props = defineProps({
   campaignId: { type: String, default: null }
@@ -153,6 +179,10 @@ const logScroll = ref(null)
 const topRec = computed(() => reportData.value?.top_recommendation || null)
 const scoredVariants = computed(() => reportData.value?.scored_variants || [])
 const reportText = computed(() => reportData.value?.report_text || null)
+const topFunnel = computed(() => {
+  const funnel = scoredVariants.value[0]?.funnel
+  return funnel && Object.keys(funnel).length ? funnel : null
+})
 
 // Max score for bar scaling
 const maxScore = computed(() => {
@@ -208,9 +238,9 @@ const loadReport = async () => {
   if (!props.campaignId) return
   try {
     addLog(`Checking for existing report: ${props.campaignId}`)
-    const res = await getCampaignReport(props.campaignId)
-    if (res.success && res.data?.report_text) {
-      reportData.value = res.data
+    const data = await getCampaignReport(props.campaignId)
+    if (data?.report_text) {
+      reportData.value = data
       addLog('Existing report loaded.')
       emit('update-status', 'completed')
     } else {
@@ -229,9 +259,9 @@ const pollForReport = () => {
   stopPolling()
   pollTimer = setInterval(async () => {
     try {
-      const res = await getCampaignReport(props.campaignId)
-      if (res.success && res.data?.report_text) {
-        reportData.value = res.data
+      const data = await getCampaignReport(props.campaignId)
+      if (data?.report_text) {
+        reportData.value = data
         isGenerating.value = false
         stopPolling()
         addLog('Recommendation report ready.')
@@ -250,19 +280,12 @@ const triggerGenerate = async (force = false) => {
   emit('update-status', 'processing')
   addLog(`Triggering recommendation generation (force=${force})…`)
   try {
-    const res = await generateCampaignRecommendations({
+    await generateCampaignRecommendations({
       campaign_id: props.campaignId,
       force_regenerate: force
     })
-    if (res.success) {
-      addLog('Generation task started. Polling for result…')
-      pollForReport()
-    } else {
-      isGenerating.value = false
-      errorMsg.value = res.error || 'Failed to start recommendation generation.'
-      addLog(`Error: ${errorMsg.value}`)
-      emit('update-status', 'error')
-    }
+    addLog('Generation task started. Polling for result…')
+    pollForReport()
   } catch (err) {
     isGenerating.value = false
     errorMsg.value = err.message
@@ -549,6 +572,29 @@ watch(() => props.campaignId, (newId) => {
 
 .action-count.positive { background: #D1FAE5; color: #065F46; }
 .action-count.negative { background: #FEE2E2; color: #991B1B; }
+
+/* Charts (per-round + funnel) — imported chart components use CS's dark-
+   theme design tokens by default; override them locally to match this
+   panel's light palette since custom properties still cascade through
+   scoped child styles. */
+.charts-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.theme-scope {
+  --color-text: #111;
+  --color-text-muted: #555;
+  --color-text-subtle: #999;
+  --color-border: #EAEAEA;
+  --color-bg-elevated: #FFF;
+  --color-surface-muted: #F0F0F0;
+  --radius-sm: 6px;
+  --radius-full: 999px;
+}
+
+.chart-block { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
 /* Full Report */
 .full-report-section { display: flex; flex-direction: column; gap: 12px; }

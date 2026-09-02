@@ -7,42 +7,24 @@
 
     <header class="home-header">
       <div class="brand">
-        <span>CS</span>
-        <strong>CampaignSim</strong>
+        <img src="/logo.png" alt="CampaignSim" class="brand__logo" />
       </div>
       <div class="home-header__actions">
-        <div
-          v-if="isMockMode"
-          class="demo-chip"
-          title="Responses come from the built-in mock API."
-        >
-          <span class="demo-chip__dot" aria-hidden="true" />
-          <span class="demo-chip__label">Demo mode</span>
-        </div>
-        <StatusBadge v-else :status="apiStatus" :label="statusLabel" />
-        <RouterLink class="history-link" to="/history">History</RouterLink>
-        <!-- Theme toggle -->
-        <button
-          class="home-theme-toggle"
-          :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="toggleTheme"
-        >
-          <svg v-if="theme === 'dark'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="5"/>
-            <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
-        </button>
-
-        <RouterLink class="app-button app-button--primary home-header__cta" to="/process">
-          Start simulation
-        </RouterLink>
+        <!-- Authenticated: Go to app -->
+        <template v-if="auth.isAuthenticated">
+          <RouterLink class="app-button app-button--primary home-header__cta" to="/briefs">
+            Go to app
+          </RouterLink>
+        </template>
+        <!-- Unauthenticated: Sign in only -->
+        <template v-else>
+          <RouterLink class="app-button app-button--ghost home-header__cta" to="/login">
+            Sign in
+          </RouterLink>
+          <RouterLink class="app-button app-button--primary home-header__cta" to="/signup">
+            Get started
+          </RouterLink>
+        </template>
       </div>
     </header>
 
@@ -66,12 +48,22 @@
             <span><svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Exportable report</span>
           </div>
           <div class="home-hero-split__actions" ref="heroActionsRef">
-            <RouterLink class="app-button app-button--primary app-button--lg" to="/process">
-              Start simulation
-            </RouterLink>
-            <RouterLink class="app-button app-button--secondary" to="/history">
-              View history
-            </RouterLink>
+            <template v-if="auth.isAuthenticated">
+              <RouterLink class="app-button app-button--primary app-button--lg" to="/process">
+                Go to app
+              </RouterLink>
+              <RouterLink class="app-button app-button--secondary" to="/history">
+                View history
+              </RouterLink>
+            </template>
+            <template v-else>
+              <RouterLink class="app-button app-button--primary app-button--lg" to="/signup">
+                Get started free
+              </RouterLink>
+              <RouterLink class="app-button app-button--secondary" to="/login">
+                Sign in
+              </RouterLink>
+            </template>
           </div>
         </div>
         <div class="home-hero-split__preview-wrap" ref="heroPreviewRef">
@@ -142,12 +134,22 @@
           <h2 id="home-close-title">Run your first simulation today.</h2>
           <p>Open the workflow with instant mock data—no backend required—or connect a live API when ready.</p>
           <div class="home-close__actions">
-            <RouterLink class="app-button app-button--primary app-button--lg" to="/process">
-              Start simulation
-            </RouterLink>
-            <RouterLink class="app-button app-button--secondary" to="/history">
-              View history
-            </RouterLink>
+            <template v-if="auth.isAuthenticated">
+              <RouterLink class="app-button app-button--primary app-button--lg" to="/process">
+                Go to app
+              </RouterLink>
+              <RouterLink class="app-button app-button--secondary" to="/history">
+                View history
+              </RouterLink>
+            </template>
+            <template v-else>
+              <RouterLink class="app-button app-button--primary app-button--lg" to="/signup">
+                Create free account
+              </RouterLink>
+              <RouterLink class="app-button app-button--secondary" to="/login">
+                Sign in
+              </RouterLink>
+            </template>
           </div>
         </div>
       </section>
@@ -160,27 +162,22 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, onUnmounted, ref } from "vue";
+import { h, onMounted, onUnmounted, ref } from "vue";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import StatusBadge from "@/components/common/StatusBadge.vue";
 import HomeEntryBridge from "@/components/home/HomeEntryBridge.vue";
 import HomeHeroPreview from "@/components/home/HomeHeroPreview.vue";
 import HomeWorkflowJourney from "@/components/home/HomeWorkflowJourney.vue";
 import HomeNetworkBg from "@/components/home/HomeNetworkBg.vue";
 import ParticleSwarm from "@/components/home/ParticleSwarm.vue";
-import { healthCheck, isMockMode } from "@/api/campaignApi";
+import { isMockMode } from "@/api/campaignApi";
 import { useTheme } from "@/composables/useTheme";
+import { useAuthStore } from "@/stores/authStore";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const { theme, toggle: toggleTheme, init: initTheme } = useTheme();
-
-const apiStatus = ref("pending");
-const statusLabel = computed(() => {
-  if (isMockMode) return "Mock mode";
-  return apiStatus.value === "completed" ? "API healthy" : "API pending";
-});
+const { init: initTheme } = useTheme();
+const auth = useAuthStore();
 
 const previewStepLabels = ["Graph", "Personas", "Variants", "Report", "Chat"];
 
@@ -223,12 +220,6 @@ let gsapCtx = null;
 
 onMounted(async () => {
   initTheme();
-
-  if (isMockMode) { apiStatus.value = "completed"; }
-  else {
-    try { await healthCheck(); apiStatus.value = "completed"; }
-    catch { apiStatus.value = "failed"; }
-  }
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 

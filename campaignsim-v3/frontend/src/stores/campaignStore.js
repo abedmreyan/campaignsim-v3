@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import router from "@/router/index.js";
+import { useDesignerStore } from "@/stores/designerStore";
 import {
   createSimulationProject,
   uploadBrandBrief as uploadBriefApi,
@@ -22,12 +23,36 @@ import {
   getReport,
   interviewPersona as interviewPersonaApi,
   getHistory,
+  getCampaignsForBrief,
 } from "@/api/campaignApi";
+import { getBrief, rebuildGraph as rebuildGraphApi } from "@/api/briefApi";
 
 const PROJECT_KEY = "campaignsim_current_project";
 const STEP_KEY = "campaignsim_current_step";
 const VARIANTS_KEY = "campaignsim_variants";
 const MOCK_STATE_KEY = "campaignsim_mock_state";
+// { [briefId]: { simulationId, graphId } } — the last simulation actually
+// prepared (has twitter_profiles.csv on disk) for each brief. /api/simulation
+// /create mints a brand-new, unprepared simulation on every call with no
+// reuse logic server-side, so resumeBrief() must remember this itself or
+// every re-open of a brief (now trivial via the workspace switcher) silently
+// swaps in a throwaway simulation that fails at launch time.
+const PREPARED_SIM_KEY = "campaignsim_prepared_simulations";
+
+function getPreparedSimulation(briefId) {
+  if (!briefId) return null;
+  const map = readJson(PREPARED_SIM_KEY, {});
+  return map[briefId] || null;
+}
+
+function setPreparedSimulation(briefId, simulationId, graphId) {
+  if (!briefId || !simulationId || !graphId) return;
+  const map = readJson(PREPARED_SIM_KEY, {});
+  map[briefId] = { simulationId, graphId };
+  try {
+    localStorage.setItem(PREPARED_SIM_KEY, JSON.stringify(map));
+  } catch {}
+}
 
 function readJson(key, fallback) {
   try {
@@ -58,8 +83,14 @@ function toApiVariant(variant) {
       tone: variant.content?.tone || variant.tone,
     },
     target_segment: variant.target_segment || "",
-    max_rounds: Number(variant.max_rounds || 10),
+    // 0 -> the backend falls back to the channel's own default round count.
+    max_rounds: Number(variant.max_rounds || 0),
     status: variant.status || "pending",
+    // Phase 2 — Designer agent provenance, preserved through edits so the
+    // launched campaign's variant rows record which ones were AI-proposed.
+    provenance: variant.provenance || "user",
+    rationale: variant.rationale || null,
+    hypothesis: variant.hypothesis || null,
   };
 }
 
@@ -70,10 +101,17 @@ export const useCampaignStore = defineStore("campaign", {
   state: () => ({
     currentStep: Number(localStorage.getItem(STEP_KEY) || persistedState?.currentStep || 1),
     notice: null,
+    brandBriefId: sessionStorage.getItem("cs_active_brief_id") || null,
 
     project: persistedProject || persistedState?.project || null,
     simulationId: persistedProject?.simulation_id || persistedState?.simulationId || null,
     graphId: persistedProject?.graph_id || persistedState?.graphId || null,
+    // True only when this.simulationId is known to have twitter_profiles.csv
+    // on disk (via prepareGraph() or generatePersonas()) or was restored from
+    // a PREPARED_SIM_KEY cache hit in resumeBrief() — decoupled from
+    // personas.items so restored-from-DB personas can't imply a launchable
+    // simulation when the underlying simulationId was never prepared.
+    simulationPrepared: persistedState?.simulationPrepared || false,
     campaignId: persistedState?.campaignId || null,
     reportId: persistedState?.reportId || null,
     uploadedFile: persistedState?.uploadedFile || null,
@@ -96,6 +134,9 @@ export const useCampaignStore = defineStore("campaign", {
     },
 
     variants: readJson(VARIANTS_KEY, persistedState?.variants || []),
+    // "" | "awareness" | "conversion" | "retention" | "launch" — shapes which
+    // funnel tier VariantScorer emphasises when ranking variants.
+    campaignObjective: persistedState?.campaignObjective || "",
 
     simulationRun: {
       runId: persistedState?.simulationRun?.runId || null,
@@ -125,10 +166,10 @@ export const useCampaignStore = defineStore("campaign", {
   getters: {
     graphReady: (state) => state.graph.nodes.length > 0 && state.graph.edges.length > 0,
     personasReady: (state) => state.personas.items.length > 0,
-    canStartSimulation: (state) => state.variants.length >= 2 && state.variants.length <= 3,
+    canStartSimulation: (state) => state.variants.length >= 1 && state.variants.length <= 6,
     simulationCompleted: (state) => state.simulationRun.status === "completed",
-    modeLabel: () => (import.meta.env.VITE_USE_MOCKS === "false" ? "Live API" : "Mock mode"),
-    isMockMode: () => import.meta.env.VITE_USE_MOCKS !== "false",
+    modeLabel: () => (import.meta.env.VITE_USE_MOCKS === "true" ? "Mock mode" : "Live API"),
+    isMockMode: () => import.meta.env.VITE_USE_MOCKS === "true",
 
     /** Presentation-only: drives .app-shell ambient canvas (idle | running | complete | error). */
     shellAmbientStatus(state) {
@@ -174,8 +215,8 @@ export const useCampaignStore = defineStore("campaign", {
       if (state.currentStep === 2 && !state.personas.items.length) {
         return "Generate audience personas.";
       }
-      if (state.currentStep === 3 && state.variants.length < 2) {
-        return "Add at least two campaign variants.";
+      if (state.currentStep === 3 && state.variants.length < 1) {
+        return "Add at least one campaign variant.";
       }
       if (state.currentStep === 4 && !state.report.data) {
         return state.simulationCompleted ? "Generate insights report." : "Complete simulation first.";
@@ -187,7 +228,7 @@ export const useCampaignStore = defineStore("campaign", {
       let completed = 0;
       if (state.graphId && state.graph.nodes.length) completed += 1;
       if (state.personas.items.length) completed += 1;
-      if (state.variants.length >= 2) completed += 1;
+      if (state.variants.length >= 1) completed += 1;
       if (state.simulationRun.status === "completed") completed += 1;
       if (state.report.data) completed += 1;
       return Math.round((completed / 5) * 100);
@@ -207,11 +248,9 @@ export const useCampaignStore = defineStore("campaign", {
           ? `${state.personas.items.length} personas`
           : "Not generated";
       const variantSubtitle =
-        state.variants.length >= 2
-          ? `${state.variants.length} variants ready`
-          : state.variants.length
-            ? `${state.variants.length} variant — need 2+`
-            : "No variants";
+        state.variants.length >= 1
+          ? `${state.variants.length} variant${state.variants.length > 1 ? "s" : ""} ready`
+          : "No variants";
       const reportSubtitle = state.report.data
         ? "Report ready"
         : state.simulationRun.status === "completed"
@@ -242,9 +281,10 @@ export const useCampaignStore = defineStore("campaign", {
     commandCtaLabel(state) {
       if (state.currentStep === 1 && !state.graphReady) return "Prepare knowledge graph";
       if (state.currentStep === 1 && state.graphReady) return "Continue to personas";
-      if (state.currentStep === 2 && !state.personas.items.length) return "Generate personas";
+      if (state.currentStep === 2 && (!state.personas.items.length || !state.simulationPrepared)) return "Generate personas";
       if (state.currentStep === 2) return "Build campaign variants";
-      if (state.currentStep === 3 && state.variants.length < 2) return "Add more variants";
+      if (state.currentStep === 3 && state.variants.length < 1) return "Add a variant";
+      if (state.currentStep === 3 && !state.simulationPrepared) return "Generate personas to launch";
       if (state.currentStep === 3) return "Launch simulation";
       if (state.currentStep === 4 && !state.report.data) return "Generate insights report";
       if (state.currentStep === 4) return "Open persona insights";
@@ -253,6 +293,11 @@ export const useCampaignStore = defineStore("campaign", {
   },
 
   actions: {
+    setCampaignObjective(objective) {
+      this.campaignObjective = objective || "";
+      this.persist();
+    },
+
     persist() {
       localStorage.setItem(STEP_KEY, String(this.currentStep));
       localStorage.setItem(VARIANTS_KEY, JSON.stringify(this.variants));
@@ -263,12 +308,14 @@ export const useCampaignStore = defineStore("campaign", {
           project: this.project,
           simulationId: this.simulationId,
           graphId: this.graphId,
+          simulationPrepared: this.simulationPrepared,
           campaignId: this.campaignId,
           reportId: this.reportId,
           uploadedFile: this.uploadedFile,
           graph: this.graph,
           personas: this.personas,
           variants: this.variants,
+          campaignObjective: this.campaignObjective,
           simulationRun: this.simulationRun,
           report: this.report,
           history: this.history,
@@ -285,6 +332,16 @@ export const useCampaignStore = defineStore("campaign", {
       }, 4200);
     },
 
+    selectBrief(id) {
+      this.brandBriefId = id;
+      sessionStorage.setItem("cs_active_brief_id", id);
+    },
+
+    clearBrief() {
+      this.brandBriefId = null;
+      sessionStorage.removeItem("cs_active_brief_id");
+    },
+
     async uploadBrandBrief(file, simulationRequirement) {
       if (!file) throw new Error("Select a PDF or TXT brand brief first.");
       const extension = file.name.split(".").pop()?.toLowerCase();
@@ -296,12 +353,15 @@ export const useCampaignStore = defineStore("campaign", {
       this.graph.error = null;
       this.graph.progress = 0;
       try {
-        // Step 1: Upload file + generate ontology (creates project server-side)
+        // Step 1: Upload file + generate ontology (creates project server-side).
+        // Pass the already-selected brief so the backend updates it in place
+        // instead of minting a new "Brand Briefs" row on every upload.
         this.graph.statusText = "Analyzing document…";
         const ontologyData = await uploadBriefApi({
           file,
           projectName: file.name.replace(/\.[^.]+$/, ""),
           simulationRequirement,
+          briefId: this.brandBriefId,
         });
         const projectId = ontologyData.project_id;
         this.graph.progress = 20;
@@ -322,6 +382,9 @@ export const useCampaignStore = defineStore("campaign", {
 
         this.simulationId = simData.simulation_id;
         this.graphId = graphId;
+        // Defensive: a fresh simulationId is never prepared yet, even though
+        // this path chains into prepareGraph() on the happy path.
+        this.simulationPrepared = false;
         this.uploadedFile = { filename: file.name, size: file.size };
         this.project = {
           ...(this.project || {}),
@@ -364,7 +427,117 @@ export const useCampaignStore = defineStore("campaign", {
       throw new Error("Graph build timed out after 5 minutes.");
     },
 
-    async prepareGraph() {
+    /**
+     * Called when entering the workflow with a brief already selected
+     * (e.g. "Open brief" from Brand Briefs). Loads that brief's existing
+     * graph if it's already built, or rebuilds it from the brief's saved
+     * content if not — either way, resuming into an active simulation
+     * instead of prompting for a fresh upload.
+     *
+     * Returns "ready" if the graph/simulation is now loaded, or
+     * "needs-upload" if the brief has no content yet to resume from.
+     */
+    async resumeBrief(briefId) {
+      if (!briefId) return "needs-upload";
+
+      this.graph.loading = true;
+      this.graph.error = null;
+      this.graph.progress = 0;
+      try {
+        const brief = await getBrief(briefId);
+        let projectId = brief.project_id;
+        let graphId = brief.graph_id;
+
+        if (brief.graph_status !== "ready" || !graphId) {
+          if (!(brief.content || "").trim()) {
+            return "needs-upload";
+          }
+          this.graph.statusText = "Rebuilding graph from saved brief…";
+          const rebuildData = await rebuildGraphApi(briefId);
+          projectId = rebuildData.project_id;
+          this.graph.progress = 30;
+          graphId = await this._pollGraphBuildTask(rebuildData.task_id, projectId);
+        }
+        this.graph.progress = 85;
+
+        this.graph.statusText = "Loading graph…";
+        await this.loadGraphRelations(graphId);
+
+        // Reuse the simulation that was actually prepared (has
+        // twitter_profiles.csv on disk) last time this brief's graph was
+        // ready, instead of always minting a fresh unprepared one — see
+        // PREPARED_SIM_KEY above for why this matters.
+        const cachedSim = getPreparedSimulation(briefId);
+        let simulationId;
+        let alreadyPrepared = false;
+        if (cachedSim && cachedSim.graphId === graphId) {
+          simulationId = cachedSim.simulationId;
+          alreadyPrepared = true;
+        } else {
+          this.graph.statusText = "Creating simulation environment…";
+          const simData = await createSimulationProject({ projectId, graphId });
+          simulationId = simData.simulation_id;
+        }
+
+        this.simulationId = simulationId;
+        this.graphId = graphId;
+        // The only source of truth for whether this simulationId actually has
+        // twitter_profiles.csv on disk — must not be inferred from restored
+        // personas below, which can belong to a different, already-superseded
+        // simulationId (that's exactly what broke launches before this fix).
+        this.simulationPrepared = alreadyPrepared;
+        this.uploadedFile = { filename: brief.name, size: (brief.content || "").length };
+        this.project = {
+          ...(this.project || {}),
+          simulation_id: simulationId,
+          graph_id: graphId,
+          project_id: projectId,
+          project_name: brief.name,
+          status: alreadyPrepared ? "ready" : "preparing",
+        };
+        this.graph.progress = 100;
+
+        // Restore any personas already generated for this brief — without
+        // this, switching away and back (or a page refresh after a switch,
+        // since resetProject() clears the localStorage snapshot) makes
+        // fully-generated personas look gone even though they're saved
+        // server-side, forcing an unnecessary regeneration.
+        await this.loadPersonas(briefId);
+
+        // Same restoration as personas, for the same reason: a generated
+        // campaign report is safely persisted server-side (inside the
+        // campaign's JSON file), but campaignId/report.data are wiped by
+        // resetProject() on every switch and resumeBrief() never re-fetched
+        // them, so a finished report looked gone until the user regenerated
+        // it — for no reason, since nothing was actually lost.
+        try {
+          const recentCampaigns = await getCampaignsForBrief(briefId, { limit: 1 });
+          const recent = recentCampaigns?.[0];
+          if (recent?.campaign_id) {
+            this.campaignId = recent.campaign_id;
+            if (recent.has_report) {
+              await this.loadCampaignReport(recent.campaign_id);
+            } else if (recent.overall_status === "completed" || recent.overall_status === "failed") {
+              this.simulationRun.status = recent.overall_status;
+            }
+          }
+        } catch {
+          // Non-fatal — resuming the brief's graph/personas still succeeds
+          // without restoring campaign history.
+        }
+
+        this.persist();
+        return "ready";
+      } catch (error) {
+        this.graph.error = normalizeError(error, "Could not resume this brief.");
+        throw error;
+      } finally {
+        this.graph.loading = false;
+        this.graph.statusText = "";
+      }
+    },
+
+    async prepareGraph(fanOut = 1) {
       if (!this.simulationId || !this.graphId) {
         this.graph.error = "Upload a brand brief before building the graph.";
         return null;
@@ -377,6 +550,7 @@ export const useCampaignStore = defineStore("campaign", {
         const task = await prepareGraphApi({
           simulation_id: this.simulationId,
           graph_id: this.graphId,
+          fan_out: fanOut,
         });
         // If already prepared, skip polling and just load relations
         if (!task.task_id || task.already_prepared) {
@@ -386,6 +560,8 @@ export const useCampaignStore = defineStore("campaign", {
         }
         await this.loadGraphRelations(this.graphId);
         this.project = { ...(this.project || {}), status: "ready" };
+        this.simulationPrepared = true;
+        setPreparedSimulation(this.brandBriefId, this.simulationId, this.graphId);
         this.persist();
         return task;
       } catch (error) {
@@ -410,7 +586,10 @@ export const useCampaignStore = defineStore("campaign", {
         this.graph.progress = data.progress || 0;
         this.graph.statusText = data.current_step || "";
         this.persist();
-        if (status === "completed") return data;
+        // Once the simulation is already prepared, the backend short-circuits
+        // to "ready" on every subsequent poll (regardless of task_id) instead
+        // of "completed" — both mean done.
+        if (status === "completed" || status === "ready") return data;
         if (status === "failed") throw new Error(data.message || "Graph preparation failed.");
       }
       throw new Error("Graph preparation timed out after 3 minutes.");
@@ -450,6 +629,7 @@ export const useCampaignStore = defineStore("campaign", {
         const task = await generateProfiles({
           simulation_id: this.simulationId,
           graph_id: this.graphId,
+          brief_id: this.brandBriefId,
           count,
           entity_types: ["CustomerPersona", "Person", "Influencer", "Consumer", "Buyer"],
           language: "en",
@@ -460,10 +640,16 @@ export const useCampaignStore = defineStore("campaign", {
         // personas.items already set from task result in pollProfileGenerationStatus.
         // Fall back to the /profiles endpoint only if task result had no profiles.
         if (!this.personas.items.length) {
-          await this.loadPersonas();
+          await this.loadPersonas(this.brandBriefId);
         }
         this.personas.progress = 100;
         this.personas.progressMessage = `${this.personas.items.length} personas generated`;
+        // pollProfileGenerationStatus() only resolves on a "completed" task,
+        // and the backend now fails that task if twitter_profiles.csv
+        // couldn't be written — so reaching here is a trustworthy signal
+        // this simulationId is actually launch-ready.
+        this.simulationPrepared = true;
+        setPreparedSimulation(this.brandBriefId, this.simulationId, this.graphId);
         this.persist();
         return this.personas.items;
       } catch (error) {
@@ -506,11 +692,30 @@ export const useCampaignStore = defineStore("campaign", {
       throw new Error("Profile generation timed out — please try again.");
     },
 
-    async loadPersonas() {
-      const data = await getProfiles(this.simulationId);
-      this.personas.items = data.personas || data.items || data.profiles || [];
-      this.persist();
-      return data;
+    async loadPersonas(briefId) {
+      this.personas.loading = true;
+      this.personas.error = null;
+      try {
+        const { apiClient } = await import("@/api/client.js");
+        const resp = await apiClient.get(`/api/briefs/${briefId}/personas`);
+        this.personas.items = resp.data.data;
+      } catch (err) {
+        this.personas.error = err.message || "Failed to load personas";
+      } finally {
+        this.personas.loading = false;
+      }
+    },
+
+    async deletePersona(personaId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.delete(`/api/briefs/personas/${personaId}`);
+      this.personas.items = this.personas.items.filter((p) => p.id !== personaId);
+    },
+
+    async clearPersonas(briefId) {
+      const { apiClient } = await import("@/api/client.js");
+      await apiClient.post(`/api/briefs/${briefId}/personas/clear`);
+      this.personas.items = [];
     },
 
     addVariant(variant) {
@@ -538,9 +743,19 @@ export const useCampaignStore = defineStore("campaign", {
       this.persist();
     },
 
-    async startAbTest() {
-      if (!this.canStartSimulation) {
-        throw new Error("Create 2 to 3 variants before starting the A/B simulation.");
+    async startAbTest(selectedVariantIds = null) {
+      const variantsToRun = selectedVariantIds
+        ? this.variants.filter((v) => selectedVariantIds.includes(v.variant_id))
+        : this.variants;
+
+      if (variantsToRun.length < 1 || variantsToRun.length > 6) {
+        throw new Error("Select 1 to 6 variants before starting the A/B simulation.");
+      }
+
+      if (!this.simulationPrepared) {
+        throw new Error(
+          'This simulation hasn\'t generated persona profiles yet — go back to Step 2 and click "Generate personas" before launching.',
+        );
       }
 
       this.simulationRun.loading = true;
@@ -550,7 +765,8 @@ export const useCampaignStore = defineStore("campaign", {
           simulation_id: this.simulationId,
           brand_name: this.project?.project_name || "",
           campaign_goal: this.project?.simulation_requirement || "",
-          variants: this.variants.map(toApiVariant),
+          objective: this.campaignObjective || "",
+          variants: variantsToRun.map(toApiVariant),
         });
         // Save campaign_id — required for ab_status polling and report generation
         this.campaignId = data.campaign_id || null;
@@ -584,23 +800,17 @@ export const useCampaignStore = defineStore("campaign", {
           // Clear any previous transient error on success
           if (this.simulationRun.error) this.simulationRun.error = null;
           const allDone = data.all_done;
-          const MAX_ROUNDS = 10;
-          // Use persona count to estimate round progress from actions_count.
-          // Each simulation round processes all personas, so:
-          //   estimated_round  = floor(actions_count / persona_count)
-          //   variant_progress = actions_count / (persona_count * MAX_ROUNDS)
-          const personaCount = Math.max(1, this.personas.items.length || 30);
-          const expectedActionsPerVariant = personaCount * MAX_ROUNDS;
 
           this.simulationRun.variants = (data.variants || []).map((v) => {
+            const maxRounds = v.max_rounds || 10;
             if (v.runner_status === "completed") {
               return {
                 variant_id: v.variant_id,
                 variant_name: v.variant_name,
                 status: "completed",
                 progress: 100,
-                current_round: MAX_ROUNDS,
-                max_rounds: MAX_ROUNDS,
+                current_round: maxRounds,
+                max_rounds: maxRounds,
               };
             }
             if (v.runner_status === "failed") {
@@ -610,23 +820,21 @@ export const useCampaignStore = defineStore("campaign", {
                 status: "failed",
                 progress: 0,
                 current_round: null,
-                max_rounds: MAX_ROUNDS,
+                max_rounds: maxRounds,
               };
             }
-            const actions = v.actions_count || 0;
-            const estimatedPct = actions > 0
-              ? Math.min(95, Math.round((actions / expectedActionsPerVariant) * 100))
-              : 0;
-            const estimatedRound = actions > 0
-              ? Math.min(MAX_ROUNDS - 1, Math.floor(actions / personaCount))
+            // Use round_end event counts from backend (v.current_round / v.max_rounds)
+            const currentRound = v.current_round || 0;
+            const progress = currentRound > 0
+              ? Math.min(95, Math.round((currentRound / maxRounds) * 100))
               : 0;
             return {
               variant_id: v.variant_id,
               variant_name: v.variant_name,
               status: "running",
-              progress: estimatedPct,
-              current_round: estimatedRound,
-              max_rounds: MAX_ROUNDS,
+              progress,
+              current_round: currentRound,
+              max_rounds: maxRounds,
             };
           });
 
@@ -634,8 +842,16 @@ export const useCampaignStore = defineStore("campaign", {
           const totalPct = this.simulationRun.variants.reduce((s, v) => s + (v.progress || 0), 0);
           this.simulationRun.progress = Math.round(totalPct / Math.max(1, this.simulationRun.variants.length));
           if (allDone) {
-            this.simulationRun.status = "completed";
-            this.project = { ...(this.project || {}), status: "completed" };
+            // all_done means every variant reached a terminal state, not that
+            // any of them succeeded — treating that as "completed" regardless
+            // showed a green "Simulation complete" banner with every variant
+            // marked Failed and 0% progress, and let the user attempt to
+            // generate an insights report from zero successful variants
+            // (canNavigateToStep(4)/simulationCompleted both gate on this
+            // same status), which just hung forever with nothing to score.
+            const anySucceeded = data.completed > 0;
+            this.simulationRun.status = anySucceeded ? "completed" : "failed";
+            this.project = { ...(this.project || {}), status: this.simulationRun.status };
           } else {
             this.simulationRun.status = "running";
           }
@@ -751,12 +967,31 @@ export const useCampaignStore = defineStore("campaign", {
         // Narrative markdown text
         markdown_content: campaignReport.report_text || "",
         // Structured metrics fields (matched to what Step4Report.vue renders)
-        executive_summary: campaignReport.executive_summary || (campaignReport.report_text || "").split("\n\n")[0] || "",
-        top_recommendation: campaignReport.top_recommendation || {
-          variant_id: best.variant_id,
-          variant_name: best.variant_name,
-          reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
-        },
+        executive_summary: campaignReport.executive_summary || (() => {
+          const rt = campaignReport.report_text || "";
+          // Extract the content under the Executive Summary heading
+          const match = rt.match(/##\s*\d*\.?\s*Executive Summary\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (match) return match[1].trim();
+          // Fallback: skip any preamble lines before the first markdown heading
+          const afterHeading = rt.replace(/^[\s\S]*?^#\s/m, "# ");
+          const firstSection = afterHeading.split("\n\n").slice(1).find(p => p.trim().length > 40) || "";
+          return firstSection.trim();
+        })(),
+        top_recommendation: (() => {
+          const tr = campaignReport.top_recommendation;
+          if (tr) {
+            return {
+              variant_id: tr.best_variant_id || tr.variant_id || best.variant_id,
+              variant_name: tr.best_variant_name || tr.variant_name || best.variant_name,
+              reason: tr.one_line_rationale || tr.reason || `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+            };
+          }
+          return {
+            variant_id: best.variant_id,
+            variant_name: best.variant_name,
+            reason: `Highest engagement at ${best.engagement_rate_pct ?? 0}%.`,
+          };
+        })(),
         ranked_variants: ranked.map((v, i) => ({
           rank: i + 1,
           variant_id: v.variant_id,
@@ -766,11 +1001,30 @@ export const useCampaignStore = defineStore("campaign", {
           engagement_rate_pct: v.engagement_rate_pct ?? 0,
           trend: v.trend || "flat",
         })),
-        segment_performance: best.segment_scores?.map((s) => ({
-          segment: s.segment,
-          best_variant_id: best.variant_id,
-          engagement_rate_pct: s.engagement_rate_pct ?? 0,
-        })) || [],
+        segment_performance: (() => {
+          // Prefer explicit segment_scores if present on any variant
+          if (best.segment_scores?.length) {
+            return best.segment_scores.map((s) => ({
+              segment: s.segment,
+              best_variant_id: best.variant_id,
+              engagement_rate_pct: s.engagement_rate_pct ?? 0,
+            }));
+          }
+          // Derive from target_segment on each scored variant
+          const bySegment = {};
+          for (const v of ranked) {
+            const seg = v.target_segment || "All";
+            if (!bySegment[seg] || v.engagement_score > bySegment[seg].engagement_score) {
+              bySegment[seg] = v;
+            }
+          }
+          return Object.entries(bySegment).map(([segment, v]) => ({
+            segment,
+            best_variant_id: v.variant_id,
+            best_variant_name: v.variant_name,
+            engagement_rate_pct: v.engagement_rate_pct ?? 0,
+          })).sort((a, b) => b.engagement_rate_pct - a.engagement_rate_pct);
+        })(),
         channel_effectiveness: Object.entries(
           ranked.reduce((acc, v) => {
             const ch = v.channel || "unknown";
@@ -783,7 +1037,25 @@ export const useCampaignStore = defineStore("campaign", {
           channel,
           average_engagement_rate_pct: Math.round((total / count) * 100) / 100,
         })),
-        strategic_recommendations: campaignReport.strategic_recommendations || [],
+        strategic_recommendations: (() => {
+          // Prefer structured field from backend
+          if (Array.isArray(campaignReport.strategic_recommendations) && campaignReport.strategic_recommendations.length) {
+            return campaignReport.strategic_recommendations;
+          }
+          // Extract bullet points from the Recommendations section of report_text
+          const rt = campaignReport.report_text || "";
+          const recSection = rt.match(/##\s*\d*\.?\s*(?:Top\s*\d*\s*)?Recommendations?\s*\n+([\s\S]*?)(?=\n##|\n---|\n#\s|$)/i);
+          if (recSection) {
+            const bullets = recSection[1].match(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*([^|]+)\*\*/g);
+            if (bullets?.length) {
+              return bullets.map(b => b.replace(/\|\s*\*\*\d+\*\*\s*\|\s*\*\*/, "").replace(/\*\*$/, "").trim());
+            }
+            // Plain bullet list fallback
+            const lines = recSection[1].split("\n").filter(l => /^[-*\d]/.test(l.trim()));
+            if (lines.length) return lines.map(l => l.replace(/^[-*\d.]+\s*/, "").trim()).filter(Boolean);
+          }
+          return [];
+        })(),
       };
     },
 
@@ -801,6 +1073,23 @@ export const useCampaignStore = defineStore("campaign", {
       }
     },
 
+    async loadCampaignReport(campaignId = this.campaignId) {
+      this.report.loading = true;
+      this.report.error = null;
+      try {
+        const data = await getCampaignReportApi(campaignId);
+        this.report.data = this._normalizeCampaignReport(data);
+        this.simulationRun.status = "completed";
+        this.persist();
+        return this.report.data;
+      } catch (error) {
+        this.report.error = normalizeError(error, "Could not load campaign report.");
+        throw error;
+      } finally {
+        this.report.loading = false;
+      }
+    },
+
     async interviewPersona(personaId, question) {
       if (!this.report.data || this.personas.items.length === 0) {
         throw new Error("Generate a report and personas before interviewing personas.");
@@ -814,7 +1103,7 @@ export const useCampaignStore = defineStore("campaign", {
       this.interviewMessages.push(userMessage);
       const answer = await interviewPersonaApi({
         simulation_id: this.simulationId,
-        report_id: this.reportId,
+        campaign_id: this.campaignId,
         persona_id: personaId,
         question,
       });
@@ -834,7 +1123,34 @@ export const useCampaignStore = defineStore("campaign", {
       this.history.error = null;
       try {
         const data = await getHistory();
-        this.history.items = data.items || data.history || [];
+        // getHistory() returns the unwrapped payload (array or object depending on St())
+        // Handle both: raw array OR object with .data/.items/.history
+        const raw = Array.isArray(data) ? data : (data?.data || data?.items || data?.history || []);
+        this.history.items = raw.map((c) => {
+          // Find the best completed variant (for "top variant" column)
+          const variants = c.variants || [];
+          const completed = variants.filter((v) => v.status === "completed");
+          const topVariant = completed[0] || variants[0];
+          return {
+            // IDs
+            simulation_id: c.simulation_id || c.campaign_id,
+            campaign_id:   c.campaign_id,
+            // Display
+            project_name:  c.brand_name || c.campaign_goal || "Campaign",
+            status:        c.overall_status || c.status || "pending",
+            variants_count: c.variant_count ?? variants.length,
+            top_variant_name: topVariant?.variant_name || null,
+            // Dates
+            created_at: c.created_at,
+            updated_at: c.updated_at || c.created_at,
+            // Navigation
+            has_report: c.has_report || false,
+            report_id:  c.report_id || null,
+            graph_id:   c.graph_id || null,
+            // Raw
+            _raw: c,
+          };
+        });
         this.persist();
         return data;
       } catch (error) {
@@ -874,6 +1190,7 @@ export const useCampaignStore = defineStore("campaign", {
       this.project = null;
       this.simulationId = null;
       this.graphId = null;
+      this.simulationPrepared = false;
       this.campaignId = null;
       this.reportId = null;
       this.uploadedFile = null;
@@ -892,6 +1209,9 @@ export const useCampaignStore = defineStore("campaign", {
       this.report = { data: null, loading: false, error: null };
       this.interviewMessages = [];
       [PROJECT_KEY, STEP_KEY, VARIANTS_KEY, MOCK_STATE_KEY].forEach((key) => localStorage.removeItem(key));
+      // A designer chat session is scoped to the simulation it was started
+      // against — don't let it leak into the next campaign.
+      useDesignerStore().reset();
     },
   },
 });

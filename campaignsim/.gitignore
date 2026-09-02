@@ -58,3 +58,6 @@ backend/uploads/
 
 # Docker 数据
 data/
+# ...except application seed data (source, not a runtime Docker volume)
+!backend/app/data/
+!backend/app/data/**

@@ -1,20 +1,29 @@
 """
 Embedding generation for the local knowledge graph.
 
-Primary:  OpenAI-compatible ``/v1/embeddings`` endpoint
-          (same provider already configured for LLM calls).
-Fallback: TF-IDF + SVD (latent semantic analysis) via scikit-learn,
-          used when the embeddings endpoint is unavailable or returns an error.
+Primary:  OpenAI-compatible ``/v1/embeddings`` endpoint, configured via
+          EMBEDDING_API_KEY/EMBEDDING_BASE_URL — separate from the chat LLM
+          config, since not every chat provider (e.g. DeepSeek) exposes
+          embeddings. Falls back to the chat LLM's own credentials if unset.
+Fallback: feature hashing (HashingVectorizer) via scikit-learn, used when
+          the embeddings endpoint is unavailable or returns an error.
 
-The fallback vectors are re-fitted each call from the current corpus so they
-remain in sync with newly added documents.  Performance is adequate for
-corpora up to ~10 K items.
+Feature hashing is stateless and always produces a fixed-size vector
+regardless of how many texts are passed in a call or what corpus has been
+seen before — unlike a corpus-fit TF-IDF+SVD model (the previous approach
+here), whose output dimensionality depended on how many texts were in each
+individual call. That meant a single search query (1 text) and a batch of
+graph edges (N texts) landed in *different-sized* vector spaces and could
+never be compared — see the `ValueError: shapes (1,) and (8,) not aligned`
+crash this replaced. Every call now lands in the same _EMBEDDING_DIM_TFIDF
+dimensions, so query and index vectors are always comparable.
 """
 
 from __future__ import annotations
 
 import hashlib
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from ...utils.logger import get_logger
@@ -24,6 +33,7 @@ logger = get_logger("campaignsim.kg.embedder")
 _EMBEDDING_MODEL = "text-embedding-3-small"
 _EMBEDDING_DIM_TFIDF = 256  # SVD target dimension for fallback vectors
 _BATCH_SIZE = 100           # max texts per API call
+_COOLDOWN_SECONDS = 60      # after a failure, skip the real API for this long before retrying
 
 
 class Embedder:
@@ -44,17 +54,19 @@ class Embedder:
     ):
         from ...config import Config  # lazy import to avoid circular deps
 
-        self._api_key = api_key or Config.LLM_API_KEY or ""
-        self._base_url = base_url or Config.LLM_BASE_URL or "https://api.openai.com/v1"
-        self._model = model or _EMBEDDING_MODEL
+        self._api_key = api_key or Config.EMBEDDING_API_KEY or ""
+        self._base_url = base_url or Config.EMBEDDING_BASE_URL or "https://api.openai.com/v1"
+        self._model = model or Config.EMBEDDING_MODEL_NAME or _EMBEDDING_MODEL
 
-        self._api_available: Optional[bool] = None  # None = not yet probed
+        # Epoch (time.monotonic) until which the real API is skipped in favor
+        # of the fallback — 0 means "never failed, always try it". A single
+        # failure used to latch this off permanently for the process's whole
+        # lifetime (a transient rate-limit or network blip meant every graph
+        # search silently used the weaker fallback until the next restart);
+        # a bounded cooldown lets it self-heal instead.
+        self._unavailable_until: float = 0.0
         self._dim: Optional[int] = None
         self._lock = threading.Lock()
-
-        # TF-IDF fallback state
-        self._tfidf_vectorizer: Any = None
-        self._tfidf_svd: Any = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -65,16 +77,17 @@ class Embedder:
         if not texts:
             return []
         clean = [t.replace("\n", " ").strip() for t in texts]
-        try:
-            if self._api_available is not False:
+        if time.monotonic() >= self._unavailable_until:
+            try:
                 result = self._embed_via_api(clean)
-                self._api_available = True
+                self._unavailable_until = 0.0  # success — clear any prior cooldown
                 return result
-        except Exception as exc:
-            logger.warning(
-                f"Embedding API unavailable ({exc!s:.120}), switching to TF-IDF fallback"
-            )
-            self._api_available = False
+            except Exception as exc:
+                logger.warning(
+                    f"Embedding API unavailable ({exc!s:.120}), "
+                    f"falling back to TF-IDF for {_COOLDOWN_SECONDS}s"
+                )
+                self._unavailable_until = time.monotonic() + _COOLDOWN_SECONDS
 
         return self._embed_via_tfidf(clean)
 
@@ -83,21 +96,34 @@ class Embedder:
         return result[0] if result else []
 
     # ------------------------------------------------------------------
-    # OpenAI-compatible API
+    # OpenAI-shaped embeddings API (OpenAI itself, Voyage AI, or any other
+    # provider whose /embeddings endpoint accepts {input, model} and returns
+    # {data: [{embedding, index}]}) — called directly via requests instead of
+    # the openai SDK, since the SDK's response model validates fields (e.g.
+    # usage.prompt_tokens) that a third-party provider like Voyage doesn't
+    # always send, and this only ever reads .data[].embedding/.index anyway.
     # ------------------------------------------------------------------
 
     def _embed_via_api(self, texts: List[str]) -> List[List[float]]:
-        from openai import OpenAI
+        import requests
 
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
+        url = f"{self._base_url.rstrip('/')}/embeddings"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
         all_embeddings: List[List[float]] = []
 
         for i in range(0, len(texts), _BATCH_SIZE):
             batch = texts[i : i + _BATCH_SIZE]
-            response = client.embeddings.create(input=batch, model=self._model)
+            response = requests.post(
+                url, headers=headers, json={"input": batch, "model": self._model}, timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()["data"]
             # Sort by index to handle any re-ordering
-            sorted_data = sorted(response.data, key=lambda d: d.index)
-            all_embeddings.extend([d.embedding for d in sorted_data])
+            sorted_data = sorted(data, key=lambda d: d["index"])
+            all_embeddings.extend([d["embedding"] for d in sorted_data])
 
         if all_embeddings and self._dim is None:
             self._dim = len(all_embeddings[0])
@@ -105,45 +131,48 @@ class Embedder:
         return all_embeddings
 
     # ------------------------------------------------------------------
-    # TF-IDF + SVD fallback
+    # Feature-hashing fallback
     # ------------------------------------------------------------------
 
     def _embed_via_tfidf(self, texts: List[str]) -> List[List[float]]:
         """
-        Produce dense vectors via TF-IDF + TruncatedSVD (LSA).
+        Produce dense vectors via feature hashing (HashingVectorizer).
 
-        The model is re-fitted on the *current* query corpus each call so new
-        documents always contribute to the vocabulary.  For retrieval tasks the
-        relative similarities are what matter, not cross-call absolute positions.
+        Stateless and corpus-independent: the output is always exactly
+        `dim` dimensions, whether embedding a single query string or a batch
+        of hundreds of texts, so vectors from any two calls are always
+        directly comparable via cosine similarity.
+
+        `dim` tracks the real provider's dimension (self._dim, set the first
+        time _embed_via_api succeeds) whenever it's known, rather than the
+        hardcoded _EMBEDDING_DIM_TFIDF constant — a fallback vector that
+        lands in a different-sized space than the real embeddings already
+        stored for a graph is exactly as broken as the original
+        different-per-call-size bug this fallback was built to fix, just
+        triggered by a rate limit instead of a batch-size mismatch.
         """
+        dim = self._dim or _EMBEDDING_DIM_TFIDF
         try:
-            from sklearn.decomposition import TruncatedSVD
-            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.feature_extraction.text import HashingVectorizer
             from sklearn.preprocessing import normalize
 
-            dim = min(_EMBEDDING_DIM_TFIDF, max(1, len(texts) - 1))
-            vectorizer = TfidfVectorizer(
-                max_features=8192, ngram_range=(1, 2), sublinear_tf=True
+            vectorizer = HashingVectorizer(
+                n_features=dim,
+                ngram_range=(1, 2),
+                alternate_sign=False,
+                norm=None,
             )
-            tfidf_matrix = vectorizer.fit_transform(texts)
-
-            if dim >= tfidf_matrix.shape[1]:
-                # corpus too small for SVD — use raw TF-IDF
-                dense = tfidf_matrix.toarray()
-            else:
-                svd = TruncatedSVD(n_components=dim, random_state=42)
-                dense = svd.fit_transform(tfidf_matrix)
-
+            dense = vectorizer.transform(texts).toarray()
             dense = normalize(dense, norm="l2")
             return dense.tolist()
 
         except ImportError:
             logger.error("scikit-learn not installed — cannot generate fallback embeddings")
             # Last resort: zero vectors so downstream code doesn't crash
-            return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
+            return [[0.0] * dim for _ in texts]
         except Exception as exc:
-            logger.error(f"TF-IDF embedding failed: {exc}")
-            return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
+            logger.error(f"Fallback embedding failed: {exc}")
+            return [[0.0] * dim for _ in texts]
 
 
 # ---------------------------------------------------------------------------

@@ -7,13 +7,40 @@ import Step4Report from "@/views/Step4Report.vue";
 import Step5Interaction from "@/views/Step5Interaction.vue";
 import HistoryDatabase from "@/views/HistoryDatabase.vue";
 import CampaignReportView from "@/views/CampaignReportView.vue";
+import DesignerSessionView from "@/views/DesignerSessionView.vue";
+import IterationCompareView from "@/views/IterationCompareView.vue";
+import DataView from "@/views/DataView.vue";
+import SegmentsView from "@/views/SegmentsView.vue";
+import LoginView from "@/views/LoginView.vue";
+import SignupView from "@/views/SignupView.vue";
+import BrandBriefView from "@/views/BrandBriefView.vue";
 import { useCampaignStore } from "@/stores/campaignStore";
+import { useAuthStore } from "@/stores/authStore";
+import { isMockMode } from "@/api/campaignApi";
+
+// Routes that do not require authentication
+const PUBLIC_ROUTES = new Set(["home", "login", "signup"]);
 
 const routes = [
   {
     path: "/",
     name: "home",
     component: Home,
+  },
+  {
+    path: "/login",
+    name: "login",
+    component: LoginView,
+  },
+  {
+    path: "/signup",
+    name: "signup",
+    component: SignupView,
+  },
+  {
+    path: "/briefs",
+    name: "briefs",
+    component: BrandBriefView,
   },
   {
     path: "/process",
@@ -30,25 +57,37 @@ const routes = [
     name: "simulation-run",
     component: SimulationRunView,
   },
-  {
-    path: "/report/:reportId",
-    name: "report",
-    component: Step4Report,
-  },
+  { path: "/report/:reportId", name: "report", component: Step4Report },
   {
     path: "/interaction/:simulationId",
     name: "interaction",
     component: Step5Interaction,
   },
-  {
-    path: "/history",
-    name: "history",
-    component: HistoryDatabase,
-  },
+  { path: "/history", name: "history", component: HistoryDatabase },
   {
     path: "/campaign/:campaignId/report",
     name: "CampaignReport",
     component: CampaignReportView,
+  },
+  {
+    path: "/campaign/:campaignId/iterations",
+    name: "IterationCompare",
+    component: IterationCompareView,
+  },
+  {
+    path: "/designer/sessions/:sessionId",
+    name: "designer-session",
+    component: DesignerSessionView,
+  },
+  {
+    path: "/audience/data",
+    name: "audience-data",
+    component: DataView,
+  },
+  {
+    path: "/audience/segments",
+    name: "audience-segments",
+    component: SegmentsView,
   },
 ];
 
@@ -58,21 +97,49 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to, from) => {
+  // Mock mode is a sandboxed, backend-free demo — auth doesn't apply.
+  if (!isMockMode) {
+    const auth = useAuthStore();
+    if (!auth.checkedSession) {
+      await auth.fetchMe();
+    }
+
+    // On initial app load (no prior route), send already-authenticated users
+    // straight to their briefs rather than the landing page.
+    if (to.name === "home" && auth.isAuthenticated && from.name == null) {
+      return { name: "briefs" };
+    }
+
+    if (!PUBLIC_ROUTES.has(to.name) && !auth.isAuthenticated) {
+      return { name: "login", query: { redirect: to.fullPath } };
+    }
+
+    if (["login", "signup"].includes(to.name) && auth.isAuthenticated) {
+      return { name: "briefs" };
+    }
+
+    // Workflow routes additionally require a selected brand brief.
+    const store = useCampaignStore();
+    const workflowRoutes = new Set(["graph", "simulation-run", "report", "interaction"]);
+    if (workflowRoutes.has(to.name) && !store.brandBriefId) {
+      store.setNotice("Select a brand brief before entering the workflow.");
+      return { name: "briefs" };
+    }
+  }
+
   const store = useCampaignStore();
-  if (to.name === "simulation-run" && store.variants.length < 2) {
-    store.setNotice("Create at least two campaign variants before starting a simulation.");
+  if (to.name === "simulation-run" && store.variants.length < 1) {
+    store.setNotice("Create at least one campaign variant before starting a simulation.");
     return { name: "process" };
   }
-
-  if (to.name === "report" && store.simulationRun.status !== "completed" && !store.report.data) {
+  if (to.name === "report" && store.simulationRun?.status !== "completed" && !store.report?.data) {
     store.setNotice("Run a simulation before opening the report.");
-    return { name: "process" };
+    return "/process";
   }
-
-  if (to.name === "interaction" && (!store.report.data || store.personas.items.length === 0)) {
+  if (to.name === "interaction" && (!store.report?.data || store.personas.items.length === 0)) {
     store.setNotice("Generate a report and personas before interviewing personas.");
-    return { name: "process" };
+    return "/process";
   }
 
   return true;

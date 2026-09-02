@@ -82,6 +82,8 @@ CREATE TABLE refresh_tokens (
   revoked     BOOLEAN DEFAULT FALSE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 
 -- Brand briefs
 CREATE TABLE brand_briefs (
@@ -195,10 +197,27 @@ export default api
 
 **Local development note:** Local dev runs over HTTP on port 5001, but `SameSite=None` requires `Secure=True`. In practice, the backend should be reached through the Cloudflare Tunnel (`campaignsim-v3.aethersystems.co`) even during local testing, or a local HTTPS proxy should be used. Alternatively, set `samesite='Lax'` during local development and `samesite='None'` in production — controlled by `FLASK_ENV`.
 
-### Rate limiting (in-scope)
-`flask-limiter` is applied to auth routes to prevent brute-force attacks:
+### JWT algorithm
+Always specify the signing algorithm explicitly to prevent algorithm-confusion attacks (`alg: none`):
 ```python
-limiter = Limiter(app, key_func=get_remote_address)
+# Encode
+jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+# Decode — pass an explicit allowlist
+jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+```
+
+### Rate limiting (in-scope)
+`flask-limiter` is applied to auth routes to prevent brute-force attacks.
+
+**Important — Cloudflare proxy awareness:** All traffic passes through the Cloudflare Tunnel, so `request.remote_addr` is always Cloudflare's egress IP. Using it as the rate-limit key means every user shares one bucket. Use the `CF-Connecting-IP` header instead, which Cloudflare always injects with the real client IP:
+
+```python
+def get_real_ip():
+    # CF-Connecting-IP is injected by Cloudflare on every request.
+    # Fallback to remote_addr only for local non-tunnel testing.
+    return request.headers.get('CF-Connecting-IP') or request.remote_addr
+
+limiter = Limiter(app, key_func=get_real_ip)
 
 @limiter.limit("10/minute")
 @auth_bp.route('/login', methods=['POST'])
@@ -349,17 +368,69 @@ actions:
   fetchMe()                → GET /api/auth/me (called on app boot)
 ```
 
+### Axios interceptor — automatic token refresh
+When the 15-minute `cs_access` cookie expires, requests return 401. An axios response interceptor catches this, calls the refresh endpoint (which uses the `cs_refresh` cookie), and retries the original request transparently. This lives in `frontend/src/api.js`:
+
+```js
+api.interceptors.response.use(null, async (err) => {
+  if (err.response?.status === 401 && !err.config._retried) {
+    err.config._retried = true
+    try {
+      await api.post('/api/auth/refresh')  // issues new cs_access cookie
+      return api(err.config)              // retry original request
+    } catch {
+      // Refresh itself failed (expired/revoked) — send to login
+      useAuthStore().user = null
+      router.push('/login')
+    }
+  }
+  return Promise.reject(err)
+})
+```
+
 ### Router changes
 ```js
-// All routes except /login and /signup require auth
+// Public routes: home, login, signup
+const PUBLIC_ROUTES = ['home', 'login', 'signup']
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  if (!auth.user && to.name !== 'login' && to.name !== 'signup') {
+  if (PUBLIC_ROUTES.includes(to.name)) return true
+  if (!auth.user) {
     await auth.fetchMe()           // attempt cookie-based restore
     if (!auth.user) return '/login'
   }
 })
 ```
+
+### `brandBriefId` persistence across page refresh
+
+Pinia state is in-memory only — a page refresh wipes `brandBriefId`, causing the router guard to redirect the user back to `/briefs` mid-workflow. Fix: persist the active brief ID to `sessionStorage` and rehydrate on app boot.
+
+```js
+// In campaignStore.js
+const BRIEF_KEY = 'cs_active_brief_id'
+
+// When user selects a brief in BrandBriefView:
+function selectBrief(id) {
+  state.brandBriefId = id
+  sessionStorage.setItem(BRIEF_KEY, id)
+}
+
+// On app boot (called after authStore.fetchMe() resolves):
+function rehydrateBrief() {
+  const saved = sessionStorage.getItem(BRIEF_KEY)
+  if (saved) state.brandBriefId = saved
+}
+
+// On logout:
+function clearBrief() {
+  state.brandBriefId = null
+  sessionStorage.removeItem(BRIEF_KEY)
+}
+```
+
+`sessionStorage` is scoped to the browser tab and cleared when the tab closes — appropriate for a workflow session. `localStorage` would persist across browser restarts (more friction for switching briefs).
 
 ### `campaignStore.js` changes
 - `generatePersonas()` POSTs to backend as before, but on completion reads from DB via `GET /api/simulation/personas?brief_id=...`
@@ -389,9 +460,16 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cs_user -d campaignsim"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://cs_user:${POSTGRES_PASSWORD}@postgres:5432/campaignsim
       JWT_SECRET: ${JWT_SECRET}

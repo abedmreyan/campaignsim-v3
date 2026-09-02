@@ -1,0 +1,61 @@
+E.L.F. COSMETICS "EYES. LIPS. FACE." — CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published e.l.f. Beauty campaign case studies and trade coverage (2019 hashtag-challenge launch)
+
+=== BRAND OVERVIEW ===
+
+e.l.f. Cosmetics ("eyes lips face") is an accessible, mass-market beauty brand known for affordable, cruelty-free makeup and a playful, internet-native voice. The brand has historically punched above its marketing budget by leaning into community-driven, music-led social content rather than traditional beauty advertising.
+
+Brand values: Accessible, inclusive, playful, unafraid to be silly.
+Market positioning: Beauty for everyone, made for how people actually discover products now — through sound, trend, and participation, not glossy print ads.
+
+=== THE CAMPAIGN CONCEPT ===
+
+e.l.f. commissioned an original song built around the brand name itself — a short, catchy hook repeating "eyes... lips... face..." — designed to be lip-synced, danced to, and remixed by ordinary users, not just watched passively. The creative asset is a single piece of music-driven video content; the open question is which content format and platform convention should carry it to drive the most participation and brand engagement.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The UGC-Native Trend Participant
+Age: 16–24.
+Psychographics: Spends significant daily time in short-form video feeds, follows sound/trend culture closely, enjoys remixing and duetting viral formats rather than just consuming them. Makeup interest is casual-to-high but secondary to "being part of the moment."
+Platforms: Lives in short-form video apps; scrolls a personalized algorithmic feed rather than a curated following list.
+Buying behaviour: Discovers products through trends and creator participation, not brand advertising.
+Ad response: Tunes out anything that reads as a traditional ad; responds to content that feels like a game or a format they can join, not watch.
+
+Segment 2 — The Established Beauty Follower
+Age: 20–32.
+Psychographics: Already follows several beauty brands and influencers, engages with posts via likes/comments/saves, has a curated aesthetic feed she checks intentionally rather than scrolling passively. Genuine product interest, values tutorials and "get the look" content.
+Platforms: Follows a curated list of brand and creator accounts; engages with posts, stories, and saved collections.
+Buying behaviour: Researches before buying, influenced by repeated brand presence and aesthetic consistency in her feed.
+Ad response: Responds to polished, on-brand visual content and social proof from accounts she already follows.
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Maximize participation and engagement with the new brand song/hook asset to drive mass awareness ahead of a product relaunch.
+
+Context: e.l.f.'s marketing team must decide where to put primary creative weight — a short-form, trend/challenge-native video built for duetting and remixing, versus a more traditional branded video post built for an established follower feed — to determine which format and platform convention drives stronger engagement and participation.
+
+Target metric: Engagement rate (likes, comments, shares, remix/participation actions) relative to audience reached.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Join the Sound" (trend/challenge-native short-form video)
+Headline: Eyes. Lips. Face. Now it's your turn.
+Body: We made a song out of our own name. Duet it, remix it, make it weird — show us your eyes, lips, face.
+CTA: Make your own
+Target segment: UGC-Native Trend Participant (Segment 1)
+Channel: TikTok
+Format: ShortFormVideo
+
+VARIANT B — "Watch & Shop the Look" (polished branded video post)
+Headline: The song stuck in your head? Now get the look.
+Body: Our new "Eyes. Lips. Face." anthem comes with the products to match — see the full look and shop every step.
+CTA: Shop the look
+Target segment: Established Beauty Follower (Segment 2)
+Channel: Instagram
+Format: VideoAd
+
+=== BRAND VOICE ===
+
+Tone: Playful, confident, internet-fluent, never condescending about trend culture.
+We treat the audience as participants in a moment, not viewers of an ad.

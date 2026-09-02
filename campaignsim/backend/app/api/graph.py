@@ -4,10 +4,14 @@ Uses project context mechanism with server-side persistent state"""
 import os
 import traceback
 import threading
-from flask import request, jsonify
+import uuid
+from flask import request, jsonify, g
 
 from . import graph_bp
 from ..config import Config
+from ..extensions import db
+from ..models.orm import BrandBrief
+from ..services.business_context import BUSINESS_TYPES
 from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
 from ..services.text_processor import TextProcessor
@@ -16,6 +20,7 @@ from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
 from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
+from ..utils.ownership import user_owns_graph
 
 logger = get_logger('campaignsim.api')
 
@@ -26,13 +31,31 @@ def allowed_file(filename: str) -> bool:
     ext = os.path.splitext(filename)[1].lower().lstrip('.')
     return ext in Config.ALLOWED_EXTENSIONS
 
+
+def _owned_brief_for_project(project_id: str):
+    """Return the current user's BrandBrief row for this project, or None.
+
+    Ownership of legacy file-based projects is tracked through the
+    brand_briefs table (each project created via the API gets a brief row).
+    """
+    return BrandBrief.query.filter_by(
+        user_id=g.current_user.id, project_id=project_id
+    ).first()
+
+
 # ==============  ==============
 
 @graph_bp.route('/project/<project_id>', methods=['GET'])
 def get_project(project_id: str):
     """..."""
+    if not _owned_brief_for_project(project_id):
+        return jsonify({
+            "success": False,
+            "error": t('api.projectNotFound', id=project_id)
+        }), 404
+
     project = ProjectManager.get_project(project_id)
-    
+
     if not project:
         return jsonify({
             "success": False,
@@ -46,10 +69,16 @@ def get_project(project_id: str):
 
 @graph_bp.route('/project/list', methods=['GET'])
 def list_projects():
-    """..."""
+    """List the current user's projects (ownership via brand_briefs rows)."""
     limit = request.args.get('limit', 50, type=int)
-    projects = ProjectManager.list_projects(limit=limit)
-    
+    owned_ids = {
+        b.project_id
+        for b in BrandBrief.query.filter_by(user_id=g.current_user.id).all()
+        if b.project_id
+    }
+    projects = [p for p in ProjectManager.list_projects(limit=1000) if p.project_id in owned_ids]
+    projects = projects[:limit]
+
     return jsonify({
         "success": True,
         "data": [p.to_dict() for p in projects],
@@ -59,8 +88,21 @@ def list_projects():
 @graph_bp.route('/project/<project_id>', methods=['DELETE'])
 def delete_project(project_id: str):
     """..."""
+    brief = _owned_brief_for_project(project_id)
+    if not brief:
+        return jsonify({
+            "success": False,
+            "error": t('api.projectDeleteFailed', id=project_id)
+        }), 404
+
     success = ProjectManager.delete_project(project_id)
-    
+    if success:
+        # Unlink the brief from the deleted project/graph but keep its text.
+        brief.project_id = None
+        brief.graph_id = None
+        brief.graph_status = 'pending'
+        db.session.commit()
+
     if not success:
         return jsonify({
             "success": False,
@@ -75,8 +117,14 @@ def delete_project(project_id: str):
 @graph_bp.route('/project/<project_id>/reset', methods=['POST'])
 def reset_project(project_id: str):
     """..."""
+    if not _owned_brief_for_project(project_id):
+        return jsonify({
+            "success": False,
+            "error": t('api.projectNotFound', id=project_id)
+        }), 404
+
     project = ProjectManager.get_project(project_id)
-    
+
     if not project:
         return jsonify({
             "success": False,
@@ -131,6 +179,27 @@ def generate_ontology():
         simulation_requirement = request.form.get('simulation_requirement', '')
         project_name = request.form.get('project_name', 'Unnamed Project')
         additional_context = request.form.get('additional_context', '')
+        business_type = request.form.get('business_type') or None
+        brief_id = request.form.get('brief_id') or None
+
+        # Reusing an already-selected brief? Look it up now so we can clean
+        # up its old project directory before minting a new one below,
+        # instead of leaking it and creating a duplicate Brand Brief row.
+        existing_brief = None
+        if brief_id:
+            try:
+                existing_brief = BrandBrief.query.filter_by(
+                    id=uuid.UUID(str(brief_id)), user_id=g.current_user.id
+                ).first()
+            except ValueError:
+                existing_brief = None
+            if existing_brief and existing_brief.project_id:
+                ProjectManager.delete_project(existing_brief.project_id)
+        if business_type and business_type not in BUSINESS_TYPES:
+            return jsonify({
+                "success": False,
+                "error": f"business_type must be one of {BUSINESS_TYPES}",
+            }), 400
         
         logger.debug(f"Project name: {project_name}")
         logger.debug(f"Campaign goal: {simulation_requirement[:100]}...")
@@ -188,7 +257,8 @@ def generate_ontology():
         ontology = generator.generate(
             document_texts=document_texts,
             simulation_requirement=simulation_requirement,
-            additional_context=additional_context if additional_context else None
+            additional_context=additional_context if additional_context else None,
+            business_type=business_type,
         )
         
         entity_count = len(ontology.get("entity_types", []))
@@ -203,6 +273,29 @@ def generate_ontology():
         project.status = ProjectStatus.ONTOLOGY_GENERATED
         ProjectManager.save_project(project)
         logger.info(f"=== Ontology complete === Project ID: {project.project_id}")
+
+        # Record ownership + reusable brief text for this user — reuse the
+        # selected brief in place if one was passed, instead of always
+        # minting a new "Brand Briefs" row on every upload.
+        if existing_brief:
+            existing_brief.name = project_name
+            existing_brief.content = all_text
+            existing_brief.project_id = project.project_id
+            existing_brief.graph_id = None
+            existing_brief.graph_status = 'pending'
+            existing_brief.business_type = business_type
+            brief = existing_brief
+        else:
+            brief = BrandBrief(
+                user_id=g.current_user.id,
+                name=project_name,
+                content=all_text,
+                project_id=project.project_id,
+                graph_status='pending',
+                business_type=business_type,
+            )
+            db.session.add(brief)
+        db.session.commit()
         
         return jsonify({
             "success": True,
@@ -261,13 +354,20 @@ def build_graph():
         data = request.get_json() or {}
         project_id = data.get('project_id')
         logger.debug(f"Request params: project_id={project_id}")
-        
+
         if not project_id:
             return jsonify({
                 "success": False,
                 "error": t('api.requireProjectId')
             }), 400
-        
+
+        brief = _owned_brief_for_project(project_id)
+        if not brief:
+            return jsonify({
+                "success": False,
+                "error": t('api.projectNotFound', id=project_id)
+            }), 404
+
         project = ProjectManager.get_project(project_id)
         if not project:
             return jsonify({
@@ -317,145 +417,35 @@ def build_graph():
                 "error": t('api.ontologyNotFound')
             }), 400
         
-        task_manager = TaskManager()
-        task_id = task_manager.create_task(f"Build graph: {graph_name}")
-        logger.info(f"Created graph build task: task_id={task_id}, project_id={project_id}")
-        
-        project.status = ProjectStatus.GRAPH_BUILDING
-        project.graph_build_task_id = task_id
-        ProjectManager.save_project(project)
-        
-        # Capture locale before spawning background thread
-        current_locale = get_locale()
+        from flask import current_app
+        from ..services.graph_build_job import start_graph_build
 
-        def build_task():
-            set_locale(current_locale)
-            build_logger = get_logger('campaignsim.build')
-            try:
-                build_logger.info(f"[{task_id}] Starting graph build...")
-                task_manager.update_task(
-                    task_id, 
-                    status=TaskStatus.PROCESSING,
-                    message=t('progress.initGraphService')
-                )
-                
-                builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.textChunking'),
-                    progress=5
-                )
-                chunks = TextProcessor.split_text(
-                    text, 
-                    chunk_size=chunk_size, 
-                    overlap=chunk_overlap
-                )
-                total_chunks = len(chunks)
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.creatingZepGraph'),
-                    progress=10
-                )
-                graph_id = builder.create_graph(name=graph_name)
-                
-                # graph_id
-                project.graph_id = graph_id
-                ProjectManager.save_project(project)
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.settingOntology'),
-                    progress=15
-                )
-                builder.set_ontology(graph_id, ontology)
-                
-                # progress_callback  (msg, progress_ratio)
-                def add_progress_callback(msg, progress_ratio):
-                    progress = 15 + int(progress_ratio * 40)  # 15% - 55%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.addingChunks', count=total_chunks),
-                    progress=15
-                )
-                
-                episode_uuids = builder.add_text_batches(
-                    graph_id, 
-                    chunks,
-                    batch_size=3,
-                    progress_callback=add_progress_callback
-                )
-                
-                # Zepepisodeprocessed
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.waitingZepProcess'),
-                    progress=55
-                )
-                
-                def wait_progress_callback(msg, progress_ratio):
-                    progress = 55 + int(progress_ratio * 35)  # 55% - 90%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-                
-                builder._wait_for_episodes(episode_uuids, wait_progress_callback)
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.fetchingGraphData'),
-                    progress=95
-                )
-                graph_data = builder.get_graph_data(graph_id)
-                
-                project.status = ProjectStatus.GRAPH_COMPLETED
-                ProjectManager.save_project(project)
-                
-                node_count = graph_data.get("node_count", 0)
-                edge_count = graph_data.get("edge_count", 0)
-                build_logger.info(f"[{task_id}] Graph build complete: graph_id={graph_id}, nodes={node_count}, edges={edge_count}")
-                
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.COMPLETED,
-                    message=t('progress.graphBuildComplete'),
-                    progress=100,
-                    result={
-                        "project_id": project_id,
-                        "graph_id": graph_id,
-                        "node_count": node_count,
-                        "edge_count": edge_count,
-                        "chunk_count": total_chunks
-                    }
-                )
-                
-            except Exception as e:
-                build_logger.error(f"[{task_id}] Graph build failed: {str(e)}")
-                build_logger.debug(traceback.format_exc())
-                
-                project.status = ProjectStatus.FAILED
-                project.error = str(e)
-                ProjectManager.save_project(project)
-                
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.FAILED,
-                    message=t('progress.buildFailed', error=str(e)),
-                    error=traceback.format_exc()
-                )
-        
-        thread = threading.Thread(target=build_task, daemon=True)
-        thread.start()
-        
+        app_obj = current_app._get_current_object()
+        brief_id = brief.id
+
+        def _sync_brief(graph_id=None, status='ready'):
+            with app_obj.app_context():
+                b = db.session.get(BrandBrief, brief_id)
+                if b:
+                    if graph_id:
+                        b.graph_id = graph_id
+                    b.graph_status = status
+                    db.session.commit()
+
+        brief.graph_status = 'building'
+        db.session.commit()
+
+        task_id = start_graph_build(
+            project=project,
+            text=text,
+            graph_name=graph_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            on_success=lambda gid: _sync_brief(graph_id=gid, status='ready'),
+            on_failure=lambda err: _sync_brief(status='failed'),
+            user_id=g.current_user.id,
+        )
+
         return jsonify({
             "success": True,
             "data": {
@@ -478,13 +468,13 @@ def build_graph():
 def get_task(task_id: str):
     """..."""
     task = TaskManager().get_task(task_id)
-    
-    if not task:
+
+    if not task or (task.user_id is not None and task.user_id != str(g.current_user.id)):
         return jsonify({
             "success": False,
             "error": t('api.taskNotFound', id=task_id)
         }), 404
-    
+
     return jsonify({
         "success": True,
         "data": task.to_dict()
@@ -493,11 +483,11 @@ def get_task(task_id: str):
 @graph_bp.route('/tasks', methods=['GET'])
 def list_tasks():
     """..."""
-    tasks = TaskManager().list_tasks()
-    
+    tasks = TaskManager().list_tasks(user_id=str(g.current_user.id))
+
     return jsonify({
         "success": True,
-        "data": [t.to_dict() for t in tasks],
+        "data": tasks,
         "count": len(tasks)
     })
 
@@ -507,6 +497,8 @@ def list_tasks():
 def get_graph_data(graph_id: str):
     """..."""
     try:
+        if not user_owns_graph(g.current_user, graph_id):
+            return jsonify({"success": False, "error": "Graph not found"}), 404
         if Config.KG_BACKEND == 'zep' and not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
@@ -532,6 +524,8 @@ def get_graph_data(graph_id: str):
 def delete_graph(graph_id: str):
     """    Zep"""
     try:
+        if not user_owns_graph(g.current_user, graph_id):
+            return jsonify({"success": False, "error": "Graph not found"}), 404
         if Config.KG_BACKEND == 'zep' and not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,

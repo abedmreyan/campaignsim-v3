@@ -58,7 +58,7 @@ export function getGraphData(graphId) {
 }
 
 /**
- * 
+ *
  * @param {String} projectId - ID
  * @returns {Promise}
  */
@@ -66,5 +66,18 @@ export function getProject(projectId) {
   return service({
     url: `/api/graph/project/${projectId}`,
     method: 'get'
+  })
+}
+
+/**
+ * List all projects/briefs owned by the current user.
+ * @param {Number} limit - max results (default 50)
+ * @returns {Promise}
+ */
+export function listProjects(limit = 50) {
+  return service({
+    url: '/api/graph/project/list',
+    method: 'get',
+    params: { limit }
   })
 }

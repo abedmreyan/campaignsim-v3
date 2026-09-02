@@ -1,0 +1,61 @@
+DUOLINGO MASCOT BRAND-VOICE CAMPAIGN — CAMPAIGN BRIEF
+Prepared for: Marketing Campaign Simulation Validation
+Source: Published Duolingo social media strategy case studies and trade coverage (ongoing owl-mascot brand voice, 2021–present)
+
+=== BRAND OVERVIEW ===
+
+Duolingo is a free language-learning app best known among casual learners for its green owl mascot, "Duo." In recent years the brand has shifted its marketing away from conventional app-store advertising and toward an irreverent, meme-driven social media voice built around the mascot's exaggeratedly intense personality, treating the brand account itself as an entertainment property rather than a billboard.
+
+Brand values: Playful, slightly unhinged, self-aware, committed to the joke even when it has nothing to do with language learning.
+Market positioning: Learning should be fun and a little chaotic — and so should the brand that teaches it.
+
+=== THE CAMPAIGN CONCEPT ===
+
+Duolingo's social team produces a constant stream of mascot-driven content with no single "launch moment" — it is an always-on brand-voice strategy rather than a one-time push. The open strategic question for this campaign is where to concentrate content production effort: fast-cut, chaotic short-form video built for an algorithmic discovery feed, versus static or carousel meme-style posts built for an existing follower feed.
+
+=== TARGET AUDIENCE SEGMENTS ===
+
+Segment 1 — The Online Meme Culture Participant
+Age: 16–27.
+Psychographics: Spends heavy time in short-form video feeds, highly fluent in meme formats and sound trends, shares content that makes them look funny/in-the-know to friends. Has often never opened the Duolingo app, or opened it once.
+Platforms: Algorithmic short-form video feed; discovers accounts through the feed, not by searching for them.
+Buying behaviour: "Converts" to app usage as a side effect of finding the brand funny, not because they were looking for a language app.
+Ad response: Actively dislikes anything that feels like marketing; responds only to content indistinguishable from organic meme content.
+
+Segment 2 — The Existing App User Who Follows the Brand
+Age: 18–40.
+Psychographics: Already uses Duolingo for at least casual daily practice, follows the brand account because they enjoy the bit, engages with posts as a small ritual alongside app use. Higher baseline affinity for the brand already.
+Platforms: Follows a curated list of accounts; checks a feed of people/brands they've chosen to follow.
+Buying behaviour: Engagement reinforces continued app use (streaks, habit) rather than driving first-time downloads.
+Ad response: Responds well to inside jokes and continuity referencing the mascot's ongoing "storyline."
+
+=== CAMPAIGN OBJECTIVE ===
+
+Objective: Maximize engagement and follower growth for the mascot brand-voice strategy to support top-of-funnel app awareness among people who don't yet use Duolingo.
+
+Context: Duolingo's social team is deciding how to split content investment between a fast, chaotic short-form video approach aimed at reaching people who don't yet follow the brand, and a static/carousel meme approach aimed at delighting the audience that already does.
+
+Target metric: Engagement rate (likes, comments, shares) and follower growth rate relative to content posted.
+
+=== CAMPAIGN VARIANTS TO TEST ===
+
+VARIANT A — "Unhinged Owl Skit" (fast-cut short-form video for discovery feeds)
+Headline: Duo has Opinions about your streak.
+Body: A short, chaotic skit where the owl mascot reacts (intensely) to a relatable everyday moment — no app explanation, no pitch, just the bit.
+CTA: Follow for more
+Target segment: Online Meme Culture Participant (Segment 1)
+Channel: TikTok
+Format: ShortFormVideo
+
+VARIANT B — "Meme Carousel" (static/multi-image meme post for follower feeds)
+Headline: POV: you skipped your lesson.
+Body: A multi-panel meme carousel building a joke across several slides, in the visual style of the accounts our audience already follows and shares.
+CTA: Tag someone who skipped today
+Target segment: Existing App User Who Follows the Brand (Segment 2)
+Channel: Instagram
+Format: CarouselPost
+
+=== BRAND VOICE ===
+
+Tone: Chaotic, self-aware, comedically intense, never explains the joke.
+We are an entertainment account that happens to be a language app, not a language app trying to be entertaining.

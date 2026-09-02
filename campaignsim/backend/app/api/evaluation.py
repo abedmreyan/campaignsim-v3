@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime
 
-from flask import jsonify, request
+from flask import jsonify, request, g
 
 from ..config import Config
 from ..utils.logger import get_logger

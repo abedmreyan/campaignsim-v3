@@ -13,6 +13,7 @@ import shutil
 from typing import Callable, Dict, List, Optional
 
 from ..models.campaign import Campaign, CampaignVariant
+from ..services.channel_registry import get_channel
 from ..services.simulation_runner import SimulationRunner
 from ..utils.logger import get_logger
 
@@ -32,6 +33,7 @@ class VariantRunner:
     def launch_all(
         self,
         campaign: Campaign,
+        user_id,
         progress_callback: Optional[Callable[[str, str, str], None]] = None,
     ) -> Campaign:
         """
@@ -41,6 +43,8 @@ class VariantRunner:
             campaign: Campaign with variants defined and simulation_id set
                       to the parent simulation that already ran /prepare
                       (needed to locate twitter_profiles.csv).
+            user_id: owner, used to resolve custom channels from the registry
+                     (builtin channels are visible to everyone).
             progress_callback: called with (variant_id, status, message)
 
         Returns:
@@ -79,6 +83,7 @@ class VariantRunner:
             self._launch_variant(
                 variant=variant,
                 campaign=campaign,
+                user_id=user_id,
                 parent_sim_dir=parent_sim_dir,
                 profiles_src=profiles_src,
                 base_agent_configs=base_agent_configs,
@@ -91,6 +96,7 @@ class VariantRunner:
         self,
         variant: CampaignVariant,
         campaign: Campaign,
+        user_id,
         parent_sim_dir: str,
         profiles_src: str,
         base_agent_configs: List[Dict],
@@ -105,6 +111,10 @@ class VariantRunner:
             progress_callback(variant.variant_id, "running", f"Starting {variant.variant_name}")
 
         try:
+            channel_def = get_channel(user_id, variant.channel)
+            if channel_def is None:
+                raise ValueError(f"Unknown channel '{variant.channel}' — not found in the channel registry")
+
             # Create variant simulation directory
             variant_sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, variant_sim_id)
             os.makedirs(variant_sim_dir, exist_ok=True)
@@ -124,17 +134,22 @@ class VariantRunner:
                 profiles_src_for_variant = profiles_src
             shutil.copy2(profiles_src_for_variant, profiles_dst)
 
-            # Build framed campaign content string
-            campaign_content = variant.formatted_content()
+            # Build framed campaign content string using the channel's own template
+            campaign_content = variant.formatted_content(channel_def.framing_template)
             if not campaign_content:
                 raise ValueError(f"Variant {variant.variant_id}: campaign content is empty")
 
-            # Write variant simulation_config.json
+            # num_rounds: explicit variant value, else the channel's own default
+            num_rounds = variant.max_rounds or channel_def.mechanics.get("max_rounds_default", 10)
+
+            # Write variant simulation_config.json — the "channel" block carries
+            # everything run_channel_simulation.py needs for channel-true mechanics:
+            # real action vocabulary, weights, funnel classification, feed/direct mode.
             variant_config = {
                 "simulation_id": variant_sim_id,
                 "variant_id": variant.variant_id,
                 "channel": variant.channel,
-                "num_rounds": variant.max_rounds,
+                "num_rounds": num_rounds,
                 "brand_agent_id": 0,
                 "campaign_content": campaign_content,
                 "agent_configs": base_agent_configs,
@@ -143,6 +158,15 @@ class VariantRunner:
                     "campaign_goal": campaign.campaign_goal,
                     "variant_name": variant.variant_name,
                     "target_segment": variant.target_segment,
+                    "objective": campaign.objective,
+                },
+                "channel_def": {
+                    "key": channel_def.key,
+                    "kind": channel_def.kind,
+                    "available_actions": channel_def.available_actions,
+                    "action_weights": channel_def.action_weights,
+                    "funnel_map": channel_def.funnel_map,
+                    "mechanics": channel_def.mechanics,
                 },
             }
             config_path = os.path.join(variant_sim_dir, "simulation_config.json")
@@ -153,7 +177,7 @@ class VariantRunner:
             state = SimulationRunner.start_simulation(
                 simulation_id=variant_sim_id,
                 platform="channel",
-                max_rounds=variant.max_rounds,
+                max_rounds=num_rounds,
             )
 
             logger.info(

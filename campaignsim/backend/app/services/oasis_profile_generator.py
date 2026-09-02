@@ -167,20 +167,21 @@ class OasisProfileGenerator:
     ]
     
     def __init__(
-        self, 
+        self,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model_name: Optional[str] = None,
         zep_api_key: Optional[str] = None,
-        graph_id: Optional[str] = None
+        graph_id: Optional[str] = None,
+        business_type: Optional[str] = None,
     ):
         self.api_key = api_key or Config.LLM_API_KEY
         self.base_url = base_url or Config.LLM_BASE_URL
         self.model_name = model_name or Config.LLM_MODEL_NAME
-        
+
         if not self.api_key:
             raise ValueError("LLM_API_KEY not configured")
-        
+
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url
@@ -193,6 +194,9 @@ class OasisProfileGenerator:
         # Knowledge graph client
         self.zep_client = KGClient(data_dir=Config.KG_DATA_DIR)
         self.graph_id = graph_id
+        # Steers persona-generation guidance (see business_context.py); one of
+        # app.services.business_context.BUSINESS_TYPES, or None.
+        self.business_type = business_type
     
     def generate_profile_from_entity(
         self, 
@@ -634,11 +638,46 @@ class OasisProfileGenerator:
         entity_type: str,
         entity_summary: str,
         entity_attributes: Dict[str, Any],
-        context: str
+        context: str,
+        variation_seed: Optional[Dict[str, int]] = None,
+        business_type: Optional[str] = None,
     ) -> str:
-        """Build the prompt for generating a customer persona agent profile."""
+        """Build the prompt for generating a customer persona agent profile.
+
+        variation_seed = {"index": i, "total": N} when this entity is being
+        fanned out into N distinct individuals (population fan-out) — the
+        prompt is told to produce a DIFFERENT specific person each time,
+        not N near-duplicates of the same archetype.
+
+        business_type steers persona framing (e.g. B2B personas get explicit
+        role/company/buying-committee guidance) — see business_context.py.
+        """
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "none"
         context_str = context[:3000] if context else "No additional context"
+
+        from .business_context import persona_guidance
+        business_block = ""
+        guidance = persona_guidance(business_type)
+        if guidance:
+            business_block = f"\nBusiness type guidance: {guidance}\n"
+
+        variation_block = ""
+        if variation_seed and variation_seed.get("total", 1) > 1:
+            idx, total = variation_seed["index"], variation_seed["total"]
+            variation_block = f"""
+IMPORTANT — population fan-out: you are generating individual {idx + 1} of {total}
+DISTINCT people who all belong to this same audience archetype. Each of the
+{total} people must be a genuinely different individual — vary their exact
+age (within a plausible range for this archetype), specific life
+circumstances, personality, voice, and the precise reasons they do or don't
+respond to marketing — while staying consistent with the archetype's core
+demographic and psychographic description below. Do not produce a
+near-duplicate of a "typical" member of this archetype; produce one specific,
+distinct person with their own texture. Use variation seed {idx} to bias
+your choices deterministically-but-differently from the other {total - 1}
+individuals (e.g. different age within range, different profession within
+the archetype's plausible set, different specific pain point emphasis).
+"""
 
         return f"""Generate a detailed customer persona profile for use in a marketing campaign simulation.
 
@@ -646,7 +685,7 @@ Entity name: {entity_name}
 Entity type: {entity_type}
 Entity summary: {entity_summary}
 Entity attributes: {attrs_str}
-
+{business_block}{variation_block}
 Context from brand knowledge graph:
 {context_str}
 
@@ -976,13 +1015,15 @@ Rules:
         entity_type: str,
         entity_summary: str,
         entity_attributes: Dict[str, Any],
-        context: str
+        context: str,
+        variation_seed: Optional[Dict[str, int]] = None,
     ) -> Dict[str, Any]:
         """Async LLM profile generation using AsyncOpenAI."""
         is_individual = self._is_individual_entity(entity_type)
         if is_individual:
             prompt = self._build_individual_persona_prompt(
-                entity_name, entity_type, entity_summary, entity_attributes, context
+                entity_name, entity_type, entity_summary, entity_attributes, context,
+                variation_seed=variation_seed, business_type=self.business_type,
             )
         else:
             prompt = self._build_group_persona_prompt(
@@ -1037,12 +1078,25 @@ Rules:
         self,
         entity: EntityNode,
         user_id: int,
-        use_llm: bool = True
+        use_llm: bool = True,
+        variation_seed: Optional[Dict[str, int]] = None,
     ) -> OasisAgentProfile:
-        """Async version of generate_profile_from_entity."""
+        """Async version of generate_profile_from_entity.
+
+        variation_seed = {"index": i, "total": N} identifies this as
+        individual i of N fanned out from the same source entity (population
+        fan-out) — biases the LLM prompt toward a distinct person and gives
+        each fanned-out persona a unique username/display name.
+        """
         entity_type = entity.get_entity_type() or "Entity"
         name = entity.name
+        is_fanned = bool(variation_seed and variation_seed.get("total", 1) > 1)
         user_name = self._generate_username(name)
+        display_name = name
+        if is_fanned:
+            idx = variation_seed["index"]
+            user_name = f"{user_name}_{idx + 1}"
+            display_name = f"{name} #{idx + 1}"
         context = await self._build_entity_context_async(entity)
 
         if use_llm:
@@ -1051,7 +1105,8 @@ Rules:
                 entity_type=entity_type,
                 entity_summary=entity.summary,
                 entity_attributes=entity.attributes,
-                context=context
+                context=context,
+                variation_seed=variation_seed,
             )
         else:
             profile_data = self._generate_profile_rule_based(
@@ -1064,7 +1119,7 @@ Rules:
         return OasisAgentProfile(
             user_id=user_id,
             user_name=user_name,
-            name=name,
+            name=display_name,
             bio=profile_data.get("bio", f"{entity_type}: {name}"),
             persona=profile_data.get("persona", entity.summary or f"A {entity_type} named {name}."),
             karma=profile_data.get("karma", random.randint(500, 5000)),
@@ -1096,6 +1151,7 @@ Rules:
         realtime_output_path: Optional[str] = None,
         output_platform: str = "reddit",
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        fan_out: int = 1,
     ) -> List[OasisAgentProfile]:
         """Generate OASIS Agent Profiles with bounded async concurrency.
 
@@ -1112,16 +1168,36 @@ Rules:
             realtime_output_path: path to write partial results after each completion
             output_platform: "reddit" (JSON) or "twitter" (CSV)
             max_concurrent: max simultaneous LLM calls (default 25)
+            fan_out: number of distinct individual personas to generate per
+                INDIVIDUAL-type entity (audience archetypes) — population
+                fan-out. Group/brand-type entities (channels, competitors,
+                the brand itself) always produce exactly 1 profile regardless
+                of fan_out. fan_out=1 (default) preserves the original
+                1-entity-to-1-persona behavior.
 
         Returns:
-            list of OasisAgentProfile in entity order
+            list of OasisAgentProfile, sequential user_id order
         """
         from threading import Lock
 
         if graph_id:
             self.graph_id = graph_id
 
-        total = len(entities)
+        fan_out = max(1, int(fan_out))
+
+        # Expand entities into (entity, variation_seed) pairs — one per output
+        # persona. Individual/audience entities fan out to `fan_out` distinct
+        # people; group/brand entities always stay 1:1.
+        tasks_spec: List[tuple] = []
+        for entity in entities:
+            entity_type = entity.get_entity_type() or "Entity"
+            if fan_out > 1 and self._is_individual_entity(entity_type):
+                for i in range(fan_out):
+                    tasks_spec.append((entity, {"index": i, "total": fan_out}))
+            else:
+                tasks_spec.append((entity, None))
+
+        total = len(tasks_spec)
         profiles: List[Optional[OasisAgentProfile]] = [None] * total
         completed_count = [0]
         lock = Lock()
@@ -1151,21 +1227,27 @@ Rules:
                 except Exception as e:
                     logger.warning(f"Realtime profile save failed: {e}")
 
-        async def generate_one(sem: asyncio.Semaphore, idx: int, entity: EntityNode):
+        async def generate_one(
+            sem: asyncio.Semaphore, idx: int, entity: EntityNode,
+            variation_seed: Optional[Dict[str, int]],
+        ):
             async with sem:  # blocks until a slot is free
                 set_locale(current_locale)
                 entity_type = entity.get_entity_type() or "Entity"
                 try:
                     profile = await self._generate_profile_from_entity_async(
-                        entity=entity, user_id=idx, use_llm=use_llm
+                        entity=entity, user_id=idx, use_llm=use_llm,
+                        variation_seed=variation_seed,
                     )
-                    self._print_generated_profile(entity.name, entity_type, profile)
+                    self._print_generated_profile(profile.name, entity_type, profile)
                 except Exception as e:
                     logger.error(f"Profile generation failed for {entity.name}: {e}")
+                    suffix = f"_{variation_seed['index'] + 1}" if variation_seed else ""
+                    label = f" #{variation_seed['index'] + 1}" if variation_seed else ""
                     profile = OasisAgentProfile(
                         user_id=idx,
-                        user_name=self._generate_username(entity.name),
-                        name=entity.name,
+                        user_name=self._generate_username(entity.name) + suffix,
+                        name=entity.name + label,
                         bio=f"{entity_type}: {entity.name}",
                         persona=entity.summary or "A participant in social discussions.",
                         source_entity_uuid=entity.uuid,
@@ -1183,17 +1265,20 @@ Rules:
                 progress_callback(
                     current,
                     total,
-                    f"Generated {current}/{total}: {entity.name} ({entity_type})"
+                    f"Generated {current}/{total}: {profile.name} ({entity_type})"
                 )
-            logger.info(f"[{current}/{total}] Done: {entity.name} ({entity_type})")
+            logger.info(f"[{current}/{total}] Done: {profile.name} ({entity_type})")
 
         async def run_all():
             sem = asyncio.Semaphore(max_concurrent)
-            await asyncio.gather(*(generate_one(sem, i, e) for i, e in enumerate(entities)))
+            await asyncio.gather(*(
+                generate_one(sem, i, entity, variation_seed)
+                for i, (entity, variation_seed) in enumerate(tasks_spec)
+            ))
 
         logger.info(
             f"Starting async generation for {total} agents "
-            f"(max {max_concurrent} concurrent)..."
+            f"(fan_out={fan_out}, max {max_concurrent} concurrent)..."
         )
         print(f"\n{'='*60}")
         print(f"Async Agent Generation — {total} profiles, {max_concurrent} concurrent slots")
@@ -1463,3 +1548,239 @@ Rules:
 
         return segments
 
+
+    # ------------------------------------------------------------------
+    # Phase 4 — persona synthesis grounded in real-customer segments
+    # ------------------------------------------------------------------
+
+    def _search_kg_for_segment(self, segment_name: str, segment_description: str) -> str:
+        """Best-effort brand KG context for a segment — never raw customer
+        rows, just facts that might sharpen how the segment is portrayed."""
+        if not self.graph_id:
+            return ""
+        try:
+            result = self.zep_client.graph.search(
+                query=f"{segment_name} {segment_description}"[:200],
+                graph_id=self.graph_id,
+                limit=5,
+                scope="edges",
+                reranker="rrf",
+            )
+            facts = [e.fact for e in result.edges if hasattr(e, "fact") and e.fact]
+            return "\n".join(f"- {f}" for f in facts[:5])
+        except Exception as e:
+            logger.warning(f"KG search failed for segment '{segment_name}': {e}")
+            return ""
+
+    def _build_segment_persona_prompt(
+        self,
+        segment_name: str,
+        segment_description: str,
+        stats: Dict[str, Any],
+        kg_context: str,
+        index: int,
+        total: int,
+        business_type: Optional[str] = None,
+    ) -> str:
+        """Ground the persona in AGGREGATE segment statistics only — no raw
+        customer row ever reaches this prompt (see segmentation_engine.py)."""
+        from .business_context import persona_guidance
+        business_block = ""
+        guidance = persona_guidance(business_type)
+        if guidance:
+            business_block = f"\nBusiness type guidance: {guidance}\n"
+
+        kg_block = f"\nBrand knowledge graph context:\n{kg_context}\n" if kg_context else ""
+
+        variation_block = ""
+        if total > 1:
+            variation_block = f"""
+IMPORTANT — population fan-out: you are generating individual {index + 1} of {total}
+DISTINCT real people who all belong to this segment. Vary exact age (within the
+segment's statistical range), specific life circumstances, personality, and voice
+while staying statistically consistent with the segment's aggregate profile below.
+Do not produce a near-duplicate of a "typical" member — produce one specific person.
+"""
+
+        return f"""Generate a detailed customer persona profile for use in a marketing campaign
+simulation. This persona represents one real member of the customer segment described
+below, which was derived by clustering this business's actual customer data.
+
+Segment name: {segment_name}
+Segment description: {segment_description}
+Segment aggregate statistics (from real customer data — {stats.get('size', 'unknown')} customers):
+{json.dumps({k: v for k, v in stats.items() if k != 'size'}, ensure_ascii=False)}
+{business_block}{kg_block}{variation_block}
+Return JSON with these exact fields:
+
+1. bio: 200-character social media bio this persona would write about themselves
+2. persona: Detailed 1500-word profile (plain text, NO newlines) covering:
+   - Demographics consistent with the segment's statistics (age, gender, location)
+   - Psychographics (values, lifestyle, motivations, pain points) that would explain
+     this segment's actual purchase/engagement statistics above
+   - Buying behaviour consistent with the segment's ltv/order_count/aov stats
+   - Channel behaviour consistent with the segment's channel and email-engagement stats
+   - Content preferences and response to advertising
+   - Relationship to the brand (aware, considers, loyal, lapsed) consistent with segment status
+3. age: integer, plausible given the segment's avg_age
+4. gender: string — must be "male" or "female"
+5. mbti: MBTI type string (e.g. "ENFP")
+6. country: country name in English
+7. profession: job title or occupation
+8. interested_topics: array of topic strings this persona cares about
+
+Rules:
+- All field values must be strings or numbers — no null, no embedded newlines
+- persona must be a single continuous paragraph
+- age must be a valid integer, gender must be "male" or "female"
+- Ground every claim in the segment statistics provided — do not invent facts that
+  contradict them
+"""
+
+    async def _generate_segment_profile_with_llm_async(
+        self,
+        segment_name: str,
+        segment_description: str,
+        stats: Dict[str, Any],
+        kg_context: str,
+        index: int,
+        total: int,
+    ) -> Dict[str, Any]:
+        prompt = self._build_segment_persona_prompt(
+            segment_name, segment_description, stats, kg_context, index, total,
+            business_type=self.business_type,
+        )
+        max_attempts = 3
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                response = await self.async_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": self._get_system_prompt(is_individual=True)},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.7 - (attempt * 0.1),
+                )
+                content = response.choices[0].message.content
+                if response.choices[0].finish_reason == "length":
+                    content = self._fix_truncated_json(content)
+                try:
+                    result = json.loads(content)
+                    result.setdefault("bio", f"Member of {segment_name}")
+                    result.setdefault("persona", segment_description or f"A member of the {segment_name} segment.")
+                    return result
+                except json.JSONDecodeError as je:
+                    result = self._try_fix_json(content, segment_name, "segment", segment_description)
+                    if result.get("_fixed"):
+                        del result["_fixed"]
+                        return result
+                    last_error = je
+            except Exception as e:
+                logger.warning(f"Segment persona LLM error (attempt {attempt + 1}): {str(e)[:80]}")
+                last_error = e
+                await asyncio.sleep(1 * (attempt + 1))
+
+        logger.warning(f"All {max_attempts} attempts failed for segment '{segment_name}': {last_error}")
+        return {
+            "bio": f"Member of {segment_name}",
+            "persona": segment_description or f"A member of the {segment_name} segment.",
+            "age": stats.get("avg_age") or 35,
+            "gender": random.choice(["male", "female"]),
+        }
+
+    def generate_profiles_from_segments(
+        self,
+        segments: List[Any],
+        counts: Dict[str, int],
+        start_user_id: int = 0,
+        max_concurrent: int = 25,
+    ) -> List["OasisAgentProfile"]:
+        """Synthesise personas grounded in approved real-data segments.
+
+        Args:
+            segments: Segment ORM rows (must be status='approved')
+            counts: {str(segment.id): N} — how many personas to generate for
+                each segment (see api/data.py for the proportional-share calc)
+            start_user_id: first user_id to assign (lets callers append these
+                after existing KG-based personas in "hybrid" mode)
+            max_concurrent: bounded LLM concurrency, same pattern as
+                generate_profiles_from_entities
+
+        Returns:
+            list of OasisAgentProfile, sequential user_id order starting at
+            start_user_id
+        """
+        from threading import Lock
+
+        tasks_spec = []
+        for segment in segments:
+            n = max(0, int(counts.get(str(segment.id), 0)))
+            for i in range(n):
+                tasks_spec.append((segment, i, n))
+
+        total = len(tasks_spec)
+        if total == 0:
+            return []
+
+        profiles: List[Optional[OasisAgentProfile]] = [None] * total
+        lock = Lock()
+        current_locale = get_locale()
+        kg_context_cache: Dict[str, str] = {}
+
+        async def generate_one(sem: asyncio.Semaphore, idx: int, segment, seg_index: int, seg_total: int):
+            async with sem:
+                set_locale(current_locale)
+                seg_id = str(segment.id)
+                with lock:
+                    if seg_id not in kg_context_cache:
+                        kg_context_cache[seg_id] = self._search_kg_for_segment(segment.name, segment.description or "")
+                kg_context = kg_context_cache[seg_id]
+
+                user_id = start_user_id + idx
+                user_name = self._generate_username(f"{segment.name}_{seg_index + 1}")
+                try:
+                    profile_data = await self._generate_segment_profile_with_llm_async(
+                        segment_name=segment.name,
+                        segment_description=segment.description or "",
+                        stats=segment.stats or {},
+                        kg_context=kg_context,
+                        index=seg_index,
+                        total=seg_total,
+                    )
+                except Exception as e:
+                    logger.error(f"Segment profile generation failed for '{segment.name}': {e}")
+                    profile_data = {"bio": f"Member of {segment.name}", "persona": segment.description or ""}
+
+                profile = OasisAgentProfile(
+                    user_id=user_id,
+                    user_name=user_name,
+                    name=f"{segment.name} #{seg_index + 1}",
+                    bio=profile_data.get("bio", f"Member of {segment.name}"),
+                    persona=profile_data.get("persona", segment.description or ""),
+                    karma=profile_data.get("karma", random.randint(500, 5000)),
+                    friend_count=profile_data.get("friend_count", random.randint(50, 500)),
+                    follower_count=profile_data.get("follower_count", random.randint(100, 1000)),
+                    statuses_count=profile_data.get("statuses_count", random.randint(100, 2000)),
+                    age=profile_data.get("age"),
+                    gender=profile_data.get("gender"),
+                    mbti=profile_data.get("mbti"),
+                    country=profile_data.get("country"),
+                    profession=profile_data.get("profession"),
+                    interested_topics=profile_data.get("interested_topics", []),
+                    source_entity_uuid=seg_id,
+                    source_entity_type="segment",
+                )
+                profiles[idx] = profile
+                logger.info(f"[{idx + 1}/{total}] Generated segment persona: {profile.name}")
+
+        async def run_all():
+            sem = asyncio.Semaphore(max_concurrent)
+            await asyncio.gather(*(
+                generate_one(sem, i, segment, seg_index, seg_total)
+                for i, (segment, seg_index, seg_total) in enumerate(tasks_spec)
+            ))
+
+        asyncio.run(run_all())
+        return [p for p in profiles if p is not None]

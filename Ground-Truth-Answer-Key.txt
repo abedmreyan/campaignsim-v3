@@ -1,0 +1,161 @@
+GROUND TRUTH ANSWER KEY — DO NOT UPLOAD TO CAMPAIGNSIM
+=========================================================
+This file exists ONLY for post-hoc human comparison after a simulation
+has finished running. It must never be uploaded as a brief, pasted into
+the brief text field, or otherwise given to the app — doing so would let
+the knowledge-graph extraction and persona generation see the real
+outcome, which defeats the entire point of a blind accuracy test.
+
+Each brief file (Airbnb-Referral-Brief.txt, Dropbox-Referral-Brief.txt,
+OldSpice-Viral-Brief.txt, CocaCola-ShareACoke-Brief.txt) now contains
+ONLY brand context, audience segments, objective, and variants to test —
+no outcome data. Use this file afterward to score how close the
+simulation's predicted winner/metrics came to what actually happened.
+
+=========================================================
+AIRBNB REFERRAL PROGRAM 2.0
+=========================================================
+In the actual published A/B test by the Airbnb Growth team, Variant A
+(Altruistic framing — "Give your friends $25") outperformed Variant B
+(Selfish framing — "Get $25") significantly across a massive sample
+size. The altruistic framing reduced social friction, making users feel
+generous rather than feeling like they were exploiting their friends
+for a payout.
+
+Check: does the simulation predict Variant A beats Variant B?
+
+=========================================================
+DROPBOX REFERRAL PROGRAM
+=========================================================
+Per Dropbox's own widely published growth figures (Drew Houston,
+founder/CEO, in multiple public talks and retrospectives), the referral
+program was one of the single largest contributors to user growth
+during this period: referrals accounted for roughly 35% of all daily
+signups at peak, and the program is credited with permanently
+increasing the overall signup rate by approximately 60% after launch —
+while also cutting customer acquisition cost relative to paid
+advertising. Dropbox grew from roughly 100,000 registered users in
+September 2008 to roughly 4,000,000 registered users by December 2009
+(commonly cited as ~3900% growth in 15 months). By April 2010, users
+had sent a cumulative 2.8 million direct referral invites. The mechanic
+(give storage, get storage) outperformed cash-based incentive tests
+Dropbox ran internally, because the reward was the same currency as the
+product itself.
+
+Check: does the simulation predict strong referral participation /
+high engagement with the storage-based incentive relative to a
+hypothetical cash incentive?
+
+=========================================================
+OLD SPICE "THE MAN YOUR MAN COULD SMELL LIKE"
+=========================================================
+The original campaign goal was a 15% increase in body wash sales. The
+actual results, per published case studies and marketing press
+coverage, far exceeded that: by May 2010, Old Spice Red Zone Body Wash
+sales were up 60% year-over-year; by July 2010, sales had doubled; by
+the end of July 2010, sales were up 125% year-over-year, and by the end
+of 2010 Old Spice had become the #1 selling men's body wash brand in
+the United States.
+
+On video performance: the original "Man Your Man Could Smell Like" spot
+reached more than 10 million YouTube views within weeks (reportedly
+more than 10x the views of that year's Dove Super Bowl ad) and over 40
+million views within its first 30 days. The Response Campaign that
+followed generated more than 65 million views in total and is widely
+cited as one of the fastest-growing and most-viewed interactive ad
+campaigns in online video history at the time. During the campaign
+period, Old Spice's Twitter following grew approximately 2,700%,
+Facebook fans grew approximately 800% (roughly 500,000 to 800,000), and
+YouTube subscribers more than doubled (roughly 65,000 to 150,000). Old
+Spice is reported to have captured 76% of online conversation/buzz in
+its category in the three months following launch — over half of it
+from women, the campaign's primary intended audience.
+
+Check: does the simulation predict the interactive Response campaign
+(Variant B) drives higher engagement/amplification than the one-way
+spot (Variant A), consistent with the real campaign's heavier weighting
+toward interactive virality?
+
+=========================================================
+COCA-COLA "SHARE A COKE" (AUSTRALIA, 2011)
+=========================================================
+Per published case studies, in the first Australian summer of the
+campaign (2011–2012), Coca-Cola volume sales rose by approximately 4%,
+snapping a decade-long decline in a single season, and young adult
+consumption specifically rose by approximately 7%. Coca-Cola sold
+roughly 250 million personalized bottles and cans in Australia — a
+country of approximately 23 million people at the time, meaning the
+average Australian bought roughly ten personalized Cokes. On social
+media, Facebook traffic in Australia rose approximately 870% during
+the campaign's initial six-month run, and more than 500,000 photos were
+shared using #ShareACoke in the first year. The campaign was judged
+successful enough that Coca-Cola expanded the personalized-name
+mechanic globally in subsequent years, eventually running it in more
+than 70 countries.
+
+Check: does the simulation predict the personalization mechanic
+(Variants B/C) outperforms a generic promotional push (Variant A) among
+the younger, disengaged segment specifically?
+
+=========================================================
+E.L.F. COSMETICS "EYES. LIPS. FACE." (2019)
+=========================================================
+Per published case studies and trade coverage (AdExchanger, Adweek,
+Campaign US, WARC), the #EyesLipsFace hashtag challenge on TikTok
+became the most viral branded campaign in TikTok US history at the
+time: roughly 5 million user-generated videos, totaling around 7
+billion views, and the fastest campaign ever to hit 1 billion views
+(in 6 days). The original song reached #4 on Spotify's global chart.
+On Instagram, the brand also saw a real but far smaller secondary
+lift: engagement rose approximately 250% within 60 days of launch.
+Paid performance also improved (56% reduction in cost-per-acquisition,
+1.9x conversion CTR vs. benchmark). e.l.f. rose from the #8 to #2
+favorite beauty brand among teens during this period.
+
+Check: does the simulation predict the TikTok short-form variant
+(Variant A) decisively outperforms the Instagram video variant
+(Variant B) — consistent with TikTok being the overwhelming primary
+driver and Instagram a real but much smaller secondary effect?
+
+=========================================================
+DUOLINGO MASCOT BRAND-VOICE STRATEGY (2021–present)
+=========================================================
+Per multiple independent case studies (Sprout Social, Rival IQ,
+Social Insider, Brand24, Marketing Brew), Duolingo's TikTok account is
+its best-performing social platform by a wide margin: TikTok follower
+growth went from roughly 50,000 to over 10 million (now 16M+), and the
+brand's top-performing TikTok videos have reached engagement rates by
+view as high as 21.5% — reported as roughly 3.5x the average for other
+language-learning apps on TikTok. By comparison, Duolingo's Instagram
+account, while healthy, runs at a markedly lower average engagement
+rate (reported around 4%). Duolingo's own social strategy explicitly
+treats TikTok as the chaotic, discovery-oriented short-form channel,
+and Instagram as the more curated, meme/carousel channel for an
+existing-follower audience.
+
+Check: does the simulation predict the TikTok short-form variant
+(Variant A) outperforms the Instagram carousel variant (Variant B) by
+a wide, decisive margin — consistent with TikTok being Duolingo's
+clearly stronger channel?
+
+=========================================================
+SURREAL CEREAL — LINKEDIN BRAND STRATEGY (UK, ongoing)
+=========================================================
+Per multiple independent trade case studies (Creative Salon, Behavio,
+The Scaleup Collective, OptiMonk, Whito, Marketing Monk, Technology
+for Marketing), Surreal deliberately built its primary brand following
+on LinkedIn — an highly unusual channel choice for a consumer food
+brand — by posting irreverent, advertising-industry-insider content
+designed to be shared by marketers and agency people specifically.
+This unconventional bet paid off: Surreal grew to roughly 110,000+
+LinkedIn followers, larger than its Instagram following of roughly
+69,000–112,000 (reported figures vary slightly by source/date), making
+LinkedIn its standout, most-talked-about channel despite being a
+B2C food brand. The strategy is widely credited as a major driver of
+Surreal becoming the fastest-growing independent cereal brand in the
+UK, reaching over 3,500 retail stores.
+
+Check: does the simulation predict the LinkedIn industry-insider
+variant (Variant A) outperforms the Instagram product-carousel variant
+(Variant B), consistent with LinkedIn being Surreal's unexpectedly
+strongest channel?

@@ -4,7 +4,7 @@ Provides report generation, retrieval, and chat endpoints"""
 import os
 import traceback
 import threading
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, g
 
 from . import report_bp
 from ..config import Config
@@ -106,7 +106,8 @@ def generate_report():
                 "simulation_id": simulation_id,
                 "graph_id": graph_id,
                 "report_id": report_id
-            }
+            },
+            user_id=g.current_user.id,
         )
         
         # Capture locale before spawning background thread

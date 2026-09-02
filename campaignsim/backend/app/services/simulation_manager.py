@@ -62,7 +62,8 @@ class SimulationState:
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
     error: Optional[str] = None
-    
+    user_id: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """..."""
         return {
@@ -83,6 +84,7 @@ class SimulationState:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "error": self.error,
+            "user_id": self.user_id,
         }
     
     def to_simple_dict(self) -> Dict[str, Any]:
@@ -165,6 +167,7 @@ class SimulationManager:
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
             error=data.get("error"),
+            user_id=data.get("user_id"),
         )
         
         self._simulations[simulation_id] = state
@@ -176,18 +179,20 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        user_id: Optional[str] = None,
     ) -> SimulationState:
         """        Args:
             project_id: ID
             graph_id: ZepID
             enable_twitter: Twitter
             enable_reddit: Reddit
-            
+            user_id: owner of this simulation
+
         Returns:
             SimulationState"""
         import uuid
         simulation_id = f"sim_{uuid.uuid4().hex[:12]}"
-        
+
         state = SimulationState(
             simulation_id=simulation_id,
             project_id=project_id,
@@ -195,6 +200,7 @@ class SimulationManager:
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
             status=SimulationStatus.CREATED,
+            user_id=user_id,
         )
         
         self._save_simulation_state(state)
@@ -210,23 +216,26 @@ class SimulationManager:
         defined_entity_types: Optional[List[str]] = None,
         use_llm_for_profiles: bool = True,
         progress_callback: Optional[callable] = None,
-        parallel_profile_count: int = 3
+        parallel_profile_count: int = 3,
+        fan_out: int = 1,
     ) -> SimulationState:
         """        1. Zep
         2. OASIS Agent ProfileLLM
         3. LLM
         4. Profile
-        5. 
-        
+        5.
+
         Args:
             simulation_id: ID
             simulation_requirement: LLM
             document_text: DocumentLLM
-            defined_entity_types: 
+            defined_entity_types:
             use_llm_for_profiles: LLM
             progress_callback:  (stage, progress, message)
             parallel_profile_count: 3
-            
+            fan_out: distinct personas generated per individual/audience entity
+                (population fan-out); brand/channel entities always stay 1:1
+
         Returns:
             SimulationState"""
         state = self._load_simulation_state(simulation_id)
@@ -282,8 +291,19 @@ class SimulationManager:
                     total=total_entities
                 )
             
+            # Resolve business_type from the brand brief backing this project,
+            # if any, to steer persona-generation guidance (see business_context.py).
+            business_type = None
+            try:
+                from ..models.orm import BrandBrief
+                brief = BrandBrief.query.filter_by(project_id=state.project_id).first()
+                if brief:
+                    business_type = brief.business_type
+            except Exception as e:
+                logger.warning(f"Could not resolve business_type for project {state.project_id}: {e}")
+
             # graph_idZep
-            generator = OasisProfileGenerator(graph_id=state.graph_id)
+            generator = OasisProfileGenerator(graph_id=state.graph_id, business_type=business_type)
             
             def profile_progress(current, total, msg):
                 if progress_callback:
@@ -313,7 +333,8 @@ class SimulationManager:
                 graph_id=state.graph_id,  # graph_idZep
                 parallel_count=parallel_profile_count,
                 realtime_output_path=realtime_output_path,
-                output_platform=realtime_platform
+                output_platform=realtime_platform,
+                fan_out=fan_out,
             )
             
             state.profiles_count = len(profiles)
@@ -428,22 +449,25 @@ class SimulationManager:
         """..."""
         return self._load_simulation_state(simulation_id)
     
-    def list_simulations(self, project_id: Optional[str] = None) -> List[SimulationState]:
+    def list_simulations(self, project_id: Optional[str] = None, user_id: Optional[str] = None) -> List[SimulationState]:
         """..."""
         simulations = []
-        
+
         if os.path.exists(self.SIMULATION_DATA_DIR):
             for sim_id in os.listdir(self.SIMULATION_DATA_DIR):
                 #  .DS_Store
                 sim_path = os.path.join(self.SIMULATION_DATA_DIR, sim_id)
                 if sim_id.startswith('.') or not os.path.isdir(sim_path):
                     continue
-                
+
                 state = self._load_simulation_state(sim_id)
                 if state:
-                    if project_id is None or state.project_id == project_id:
-                        simulations.append(state)
-        
+                    if project_id is not None and state.project_id != project_id:
+                        continue
+                    if user_id is not None and state.user_id not in (None, user_id):
+                        continue
+                    simulations.append(state)
+
         return simulations
     
     def get_profiles(self, simulation_id: str, platform: str = "reddit") -> List[Dict[str, Any]]:
