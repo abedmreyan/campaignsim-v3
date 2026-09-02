@@ -139,16 +139,25 @@ class Embedder:
         Produce dense vectors via feature hashing (HashingVectorizer).
 
         Stateless and corpus-independent: the output is always exactly
-        _EMBEDDING_DIM_TFIDF dimensions, whether embedding a single query
-        string or a batch of hundreds of texts, so vectors from any two
-        calls are always directly comparable via cosine similarity.
+        `dim` dimensions, whether embedding a single query string or a batch
+        of hundreds of texts, so vectors from any two calls are always
+        directly comparable via cosine similarity.
+
+        `dim` tracks the real provider's dimension (self._dim, set the first
+        time _embed_via_api succeeds) whenever it's known, rather than the
+        hardcoded _EMBEDDING_DIM_TFIDF constant — a fallback vector that
+        lands in a different-sized space than the real embeddings already
+        stored for a graph is exactly as broken as the original
+        different-per-call-size bug this fallback was built to fix, just
+        triggered by a rate limit instead of a batch-size mismatch.
         """
+        dim = self._dim or _EMBEDDING_DIM_TFIDF
         try:
             from sklearn.feature_extraction.text import HashingVectorizer
             from sklearn.preprocessing import normalize
 
             vectorizer = HashingVectorizer(
-                n_features=_EMBEDDING_DIM_TFIDF,
+                n_features=dim,
                 ngram_range=(1, 2),
                 alternate_sign=False,
                 norm=None,
@@ -160,10 +169,10 @@ class Embedder:
         except ImportError:
             logger.error("scikit-learn not installed — cannot generate fallback embeddings")
             # Last resort: zero vectors so downstream code doesn't crash
-            return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
+            return [[0.0] * dim for _ in texts]
         except Exception as exc:
             logger.error(f"Fallback embedding failed: {exc}")
-            return [[0.0] * _EMBEDDING_DIM_TFIDF for _ in texts]
+            return [[0.0] * dim for _ in texts]
 
 
 # ---------------------------------------------------------------------------

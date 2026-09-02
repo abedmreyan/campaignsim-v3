@@ -124,6 +124,7 @@ def _rank(
     if query_emb and any(c.embedding is not None for c in candidates):
         q = np.array(query_emb, dtype=np.float32)
         cosine_scores: List[float] = []
+        mismatches = 0
         for c in candidates:
             if c.embedding is not None:
                 v = np.array(c.embedding, dtype=np.float32)
@@ -133,11 +134,19 @@ def _rank(
                     # vector scoring for this candidate instead of crashing;
                     # it'll get correct embeddings on the next graph rebuild.
                     score = 0.0
+                    mismatches += 1
                 else:
                     score = float(np.dot(q, v) / (np.linalg.norm(q) * np.linalg.norm(v) + 1e-10))
             else:
                 score = 0.0
             cosine_scores.append(score)
+        if mismatches:
+            logger.warning(
+                f"kg search: {mismatches}/{len(candidates)} candidates had a "
+                f"dimension mismatch against the query embedding (query dim="
+                f"{q.shape[0]}) — these were skipped for vector scoring. "
+                f"Graph may need re-embedding."
+            )
         cosine_ranked = sorted(
             range(len(candidates)), key=lambda i: -cosine_scores[i]
         )
