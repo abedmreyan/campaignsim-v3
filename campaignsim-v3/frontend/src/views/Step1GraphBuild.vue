@@ -868,7 +868,14 @@ const inputMethod = ref(null); // null | 'guided' | 'upload'
 // with no visible way to reuse an existing brief, was why every "Open brief"
 // click was re-uploading and minting a duplicate Brand Brief.
 onMounted(async () => {
-  if (store.brandBriefId && !store.graphReady) {
+  // Also re-resume when simulationId is missing even though graphReady is
+  // already true: loadGraphRelations() (called partway through
+  // resumeBrief()) persists graph.nodes/edges to localStorage before
+  // resumeBrief() finishes setting simulationId/simulationPrepared, so a
+  // reload that lands in that window would otherwise see graphReady=true,
+  // skip resumeBrief() entirely, and permanently strand simulationId at
+  // null for the rest of the session.
+  if (store.brandBriefId && (!store.graphReady || !store.simulationId)) {
     try {
       await store.resumeBrief(store.brandBriefId);
     } catch {

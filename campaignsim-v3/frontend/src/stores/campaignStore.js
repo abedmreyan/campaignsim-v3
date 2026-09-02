@@ -618,6 +618,16 @@ export const useCampaignStore = defineStore("campaign", {
         this.personas.error = "Build the knowledge graph before generating personas.";
         return null;
       }
+      // Without a simulationId, the backend skips the twitter_profiles.csv
+      // write entirely (it's gated on simulation_id being present) but the
+      // task still reports success — that would let this function set
+      // simulationPrepared = true on a simulation that was never actually
+      // prepared. graphReady alone doesn't guarantee this is set — see the
+      // Step1GraphBuild.vue onMounted fix for the resumeBrief() race this guards against.
+      if (!this.simulationId) {
+        this.personas.error = "No active simulation for this business — try reopening it from Brand Briefs.";
+        return null;
+      }
 
       this.personas.loading = true;
       this.personas.error = null;

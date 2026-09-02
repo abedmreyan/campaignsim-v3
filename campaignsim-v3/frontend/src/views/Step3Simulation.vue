@@ -323,12 +323,16 @@ function selectAll() {
 
 const canLaunch = computed(() => {
   const count = selectedIds.size;
-  return count >= 1 && count <= 6 && !store.simulationRun.loading;
+  return count >= 1 && count <= 6 && !store.simulationRun.loading && store.simulationPrepared;
 });
 
 const selectionHint = computed(() => {
   if (selectedIds.size === 0) return "Select at least 1 variant";
   if (selectedIds.size > 6) return "Maximum 6 variants";
+  // Restored-from-DB personas can be visible even when the underlying
+  // simulation was never prepared (e.g. switching back to this business) —
+  // simulationPrepared is the actual launch precondition, not persona count.
+  if (!store.simulationPrepared) return "Generate personas (Step 2) before launching";
   return "Ready to launch";
 });
 
