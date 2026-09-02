@@ -106,6 +106,12 @@ export const useCampaignStore = defineStore("campaign", {
     project: persistedProject || persistedState?.project || null,
     simulationId: persistedProject?.simulation_id || persistedState?.simulationId || null,
     graphId: persistedProject?.graph_id || persistedState?.graphId || null,
+    // True only when this.simulationId is known to have twitter_profiles.csv
+    // on disk (via prepareGraph() or generatePersonas()) or was restored from
+    // a PREPARED_SIM_KEY cache hit in resumeBrief() — decoupled from
+    // personas.items so restored-from-DB personas can't imply a launchable
+    // simulation when the underlying simulationId was never prepared.
+    simulationPrepared: persistedState?.simulationPrepared || false,
     campaignId: persistedState?.campaignId || null,
     reportId: persistedState?.reportId || null,
     uploadedFile: persistedState?.uploadedFile || null,
@@ -275,9 +281,10 @@ export const useCampaignStore = defineStore("campaign", {
     commandCtaLabel(state) {
       if (state.currentStep === 1 && !state.graphReady) return "Prepare knowledge graph";
       if (state.currentStep === 1 && state.graphReady) return "Continue to personas";
-      if (state.currentStep === 2 && !state.personas.items.length) return "Generate personas";
+      if (state.currentStep === 2 && (!state.personas.items.length || !state.simulationPrepared)) return "Generate personas";
       if (state.currentStep === 2) return "Build campaign variants";
       if (state.currentStep === 3 && state.variants.length < 1) return "Add a variant";
+      if (state.currentStep === 3 && !state.simulationPrepared) return "Generate personas to launch";
       if (state.currentStep === 3) return "Launch simulation";
       if (state.currentStep === 4 && !state.report.data) return "Generate insights report";
       if (state.currentStep === 4) return "Open persona insights";
@@ -301,6 +308,7 @@ export const useCampaignStore = defineStore("campaign", {
           project: this.project,
           simulationId: this.simulationId,
           graphId: this.graphId,
+          simulationPrepared: this.simulationPrepared,
           campaignId: this.campaignId,
           reportId: this.reportId,
           uploadedFile: this.uploadedFile,
@@ -374,6 +382,9 @@ export const useCampaignStore = defineStore("campaign", {
 
         this.simulationId = simData.simulation_id;
         this.graphId = graphId;
+        // Defensive: a fresh simulationId is never prepared yet, even though
+        // this path chains into prepareGraph() on the happy path.
+        this.simulationPrepared = false;
         this.uploadedFile = { filename: file.name, size: file.size };
         this.project = {
           ...(this.project || {}),
@@ -470,6 +481,11 @@ export const useCampaignStore = defineStore("campaign", {
 
         this.simulationId = simulationId;
         this.graphId = graphId;
+        // The only source of truth for whether this simulationId actually has
+        // twitter_profiles.csv on disk — must not be inferred from restored
+        // personas below, which can belong to a different, already-superseded
+        // simulationId (that's exactly what broke launches before this fix).
+        this.simulationPrepared = alreadyPrepared;
         this.uploadedFile = { filename: brief.name, size: (brief.content || "").length };
         this.project = {
           ...(this.project || {}),
@@ -544,6 +560,7 @@ export const useCampaignStore = defineStore("campaign", {
         }
         await this.loadGraphRelations(this.graphId);
         this.project = { ...(this.project || {}), status: "ready" };
+        this.simulationPrepared = true;
         setPreparedSimulation(this.brandBriefId, this.simulationId, this.graphId);
         this.persist();
         return task;
@@ -627,6 +644,12 @@ export const useCampaignStore = defineStore("campaign", {
         }
         this.personas.progress = 100;
         this.personas.progressMessage = `${this.personas.items.length} personas generated`;
+        // pollProfileGenerationStatus() only resolves on a "completed" task,
+        // and the backend now fails that task if twitter_profiles.csv
+        // couldn't be written — so reaching here is a trustworthy signal
+        // this simulationId is actually launch-ready.
+        this.simulationPrepared = true;
+        setPreparedSimulation(this.brandBriefId, this.simulationId, this.graphId);
         this.persist();
         return this.personas.items;
       } catch (error) {
@@ -727,6 +750,12 @@ export const useCampaignStore = defineStore("campaign", {
 
       if (variantsToRun.length < 1 || variantsToRun.length > 6) {
         throw new Error("Select 1 to 6 variants before starting the A/B simulation.");
+      }
+
+      if (!this.simulationPrepared) {
+        throw new Error(
+          'This simulation hasn\'t generated persona profiles yet — go back to Step 2 and click "Generate personas" before launching.',
+        );
       }
 
       this.simulationRun.loading = true;
@@ -1161,6 +1190,7 @@ export const useCampaignStore = defineStore("campaign", {
       this.project = null;
       this.simulationId = null;
       this.graphId = null;
+      this.simulationPrepared = false;
       this.campaignId = null;
       this.reportId = null;
       this.uploadedFile = null;

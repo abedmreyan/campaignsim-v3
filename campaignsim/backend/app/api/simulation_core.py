@@ -1299,34 +1299,39 @@ def generate_profiles():
 
                 # Save profiles to disk so /profiles endpoint can serve them
                 if simulation_id:
+                    from ..services.simulation_manager import SimulationManager
+                    mgr = SimulationManager()
+                    sim_dir = mgr._get_simulation_dir(simulation_id)
                     try:
-                        from ..services.simulation_manager import SimulationManager
-                        mgr = SimulationManager()
-                        sim_dir = mgr._get_simulation_dir(simulation_id)
                         generator.save_profiles(
                             profiles=profiles,
                             file_path=os.path.join(sim_dir, f"{platform}_profiles.json"),
                             platform=platform
                         )
                         logger.info(f"Saved {len(profiles)} profiles to disk for simulation {simulation_id}")
-
-                        # variant_runner.py requires twitter_profiles.csv to launch
-                        # ANY variant, unconditionally, regardless of which platform
-                        # was requested here — it's the only format OASIS agent
-                        # simulation consumes. /api/simulation/prepare also writes
-                        # this file, but this endpoint (Step 2's "Generate personas"
-                        # button, what the UI actually calls) is not guaranteed to
-                        # run after it, so write it here too whenever it's missing
-                        # so a launch never fails on a step this endpoint can satisfy
-                        # itself.
-                        if platform != "twitter":
-                            generator.save_profiles(
-                                profiles=profiles,
-                                file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
-                                platform="twitter"
-                            )
                     except Exception as save_err:
-                        logger.warning(f"Could not save profiles to disk: {save_err}")
+                        # Display-only artifact — not required to launch a
+                        # simulation, so a failure here shouldn't fail the task.
+                        logger.warning(f"Could not save {platform}_profiles.json to disk: {save_err}")
+
+                    # variant_runner.py requires twitter_profiles.csv to launch
+                    # ANY variant, unconditionally, regardless of which platform
+                    # was requested here — it's the only format OASIS agent
+                    # simulation consumes. /api/simulation/prepare also writes
+                    # this file, but this endpoint (Step 2's "Generate personas"
+                    # button, what the UI actually calls) is not guaranteed to
+                    # run after it, so write it here too whenever it's missing
+                    # so a launch never fails on a step this endpoint can satisfy
+                    # itself. Unlike the JSON above, this write is load-bearing:
+                    # the frontend treats a completed task as proof the
+                    # simulation is launch-ready, so a failure here must fail
+                    # the task rather than be silently swallowed.
+                    if platform != "twitter":
+                        generator.save_profiles(
+                            profiles=profiles,
+                            file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
+                            platform="twitter"
+                        )
 
                 # Persist to the personas table too — this is the only durable
                 # copy across sessions/switches. Without this, generated
